@@ -8,14 +8,15 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use sk_core::*;
-use sk_eval::{hand_eval, HandEval};
+use sk_eval::{hand_eval, Evaluator, HandEval};
+use sk_nnue::AnyEval;
 use sk_search::{level_limits, mate_in, Limits, SearchResult, Searcher, MATE_BOUND};
 
 const BENCH: &str = include_str!("../../../testdata/bench-positions.txt");
 
 struct Engine {
     pos: Position,
-    searcher: Arc<Mutex<Searcher<HandEval>>>,
+    searcher: Arc<Mutex<Searcher<AnyEval>>>,
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     random_margin: i32,
@@ -51,7 +52,7 @@ fn say(line: &str) {
 
 impl Engine {
     fn new() -> Self {
-        let searcher = Searcher::new(HandEval);
+        let searcher = Searcher::new(AnyEval::Hand);
         let stop = searcher.stop_handle();
         Engine {
             pos: Position::startpos(),
@@ -82,6 +83,7 @@ impl Engine {
                 say("id name StockKnight 0.1");
                 say("id author StockKnight authors");
                 say("option name RandomMargin type spin default 0 min 0 max 1000");
+                say("option name EvalFile type string default none");
                 say("uciok");
             }
             "isready" => say("readyok"),
@@ -112,7 +114,15 @@ impl Engine {
                     .collect();
                 say(&moves.join(" "));
             }
-            "eval" => say(&format!("G0 {} cp (side to move)", hand_eval(&self.pos))),
+            "eval" => {
+                let mut s = self.searcher.lock().unwrap();
+                let name = s.eval.name();
+                let value = s.eval.evaluate(&self.pos);
+                say(&format!(
+                    "{name} {value} cp, G0 {} cp (side to move)",
+                    hand_eval(&self.pos)
+                ));
+            }
             "status" => say(&self.pos.outcome().code()),
             "perft" => {
                 let depth = words.get(1).and_then(|s| s.parse().ok()).unwrap_or(1);
@@ -144,6 +154,15 @@ impl Engine {
         match (name.copied(), value) {
             (Some("RandomMargin"), Some(v)) => self.random_margin = v.parse().unwrap_or(0),
             (Some("Hash"), _) => {} // fixed-size table for now
+            (Some("EvalFile"), v) => match AnyEval::from_file(v.copied().unwrap_or("none")) {
+                Ok(e) => {
+                    let mut s = self.searcher.lock().unwrap();
+                    s.eval = e;
+                    s.clear();
+                    say(&format!("info string evaluation {}", s.eval.name()));
+                }
+                Err(e) => say(&format!("info string error {e}")),
+            },
             _ => say("info string unknown option"),
         }
     }

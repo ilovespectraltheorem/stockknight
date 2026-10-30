@@ -16,12 +16,15 @@ use std::time::{Duration, Instant};
 
 use sk_core::*;
 use sk_data::{GameResult, Record, RecordReader};
+use sk_eval::Evaluator;
+#[cfg(test)]
 use sk_eval::HandEval;
+use sk_nnue::AnyEval;
 use sk_search::{Limits, Searcher, MATE_BOUND};
 
 const USAGE: &str = "usage:
   sk-datagen run --out <prefix> (--positions N | --games N | --minutes M)
-      [--nodes 5000] [--threads N] [--seed 1] [--random-plies 8] [--opening-limit 600]
+      [--eval-file net.nnue] [--nodes 5000] [--threads N] [--seed 1] [--random-plies 8] [--opening-limit 600]
       [--max-plies 400] [--adjudicate 1500] [--adjudicate-plies 8] [--quiet-draw 120]
       [--record-quiet-limit 40] [--val-fraction 0.01]
   sk-datagen stats <file>
@@ -114,7 +117,7 @@ pub struct Game {
 }
 
 /// One self-play game, fully determined by the settings and the game index.
-pub fn play_game(s: &Settings, searcher: &mut Searcher<HandEval>, index: u64) -> Game {
+pub fn play_game<E: Evaluator>(s: &Settings, searcher: &mut Searcher<E>, index: u64) -> Game {
     let mut rng = splitmix(s.seed ^ splitmix(index));
     let mut next = || {
         rng = splitmix(rng);
@@ -234,6 +237,7 @@ struct Totals {
 fn run(args: &[String]) {
     let known = [
         "out",
+        "eval-file",
         "positions",
         "games",
         "minutes",
@@ -262,6 +266,10 @@ fn run(args: &[String]) {
     if target_positions == 0 && target_games == 0 && minutes <= 0.0 {
         fail("give --positions, --games or --minutes");
     }
+    let eval_file = o.get("eval-file").cloned().unwrap_or_else(|| "none".into());
+    let evaluator = AnyEval::from_file(&eval_file)
+        .unwrap_or_else(|e| fail(e))
+        .name();
     let threads: usize = num(
         &o,
         "threads",
@@ -301,10 +309,10 @@ fn run(args: &[String]) {
 
     let workers: Vec<_> = (0..threads.max(1))
         .map(|_| {
-            let (s, out, next_game, positions, stop) =
-                (s.clone(), out.clone(), next_game.clone(), positions.clone(), stop.clone());
+            let (s, out, next_game, positions, stop, eval_file) =
+                (s.clone(), out.clone(), next_game.clone(), positions.clone(), stop.clone(), eval_file.clone());
             std::thread::spawn(move || {
-                let mut searcher = Searcher::new(HandEval);
+                let mut searcher = Searcher::new(AnyEval::from_file(&eval_file).unwrap_or_else(|e| fail(e)));
                 loop {
                     let done_positions = target_positions > 0 && positions.load(Ordering::Relaxed) >= target_positions;
                     if stop.load(Ordering::Relaxed) || done_positions || deadline.is_some_and(|d| Instant::now() >= d) {
@@ -354,8 +362,8 @@ fn run(args: &[String]) {
     let mut info = String::new();
     let mut kv = |k: &str, v: String| info.push_str(&format!("{k}: {v}\n"));
     kv("ruleset", RULESET.into());
-    kv("evaluator", "G0".into());
-    kv("eval_file", "none".into());
+    kv("evaluator", evaluator.into());
+    kv("eval_file", eval_file.clone());
     kv("nodes", s.nodes.to_string());
     kv("random_plies", s.random_plies.to_string());
     kv("opening_limit", s.opening_limit.to_string());

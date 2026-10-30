@@ -5,3 +5,6 @@ wheelhouse/
 __pycache__/
 node_modules/
 *.bin
+__pycache__/
+*.nnue
+.pytest_cache/
