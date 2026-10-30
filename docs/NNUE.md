@@ -63,5 +63,51 @@ target/release/sk-match --e1 target/release/stockknight --init1 "setoption name 
     --e2 target/release/stockknight --games 400 --nodes 5000 --concurrency 4
 ```
 
-In this phase the engine evaluates a network from scratch at every node (float). Incremental,
-quantized inference is Phase 4.
+## Inference in search
+
+The engine runs a network in integers, updated move by move (`crates/nnue/src/quant.rs`,
+`incremental.rs`). The float forward pass in `network.rs` is the reference.
+
+**Quantization**, chosen when the network is loaded:
+
+| Part | Weights | Values |
+|---|---|---|
+| Feature transformer | i16 at scale 127·2^s | i16 accumulator; activation `clamp(acc >> s, 0, 127)` |
+| First hidden layer | i8 at scale 2^k | i32 sum at 127·2^k; activation `clamp(sum >> k, 0, 127)` |
+| Second hidden layer, output | i16 at scale 2^k | the same |
+
+Each shift is the largest that cannot overflow. For s, that is checked against the worst case
+for any position: the bias, the 35 largest weights of one king square's block and all 10
+reserve weights. Biases carry the half that makes each shift round to nearest. For G1 the
+shifts are s 5, k 9, 14, 14. Training keeps hidden weights within ±127/64, so the first layer
+always fits in i8.
+
+**Accumulators.** `make` records what a move changes (at most two pieces off, one on, and the
+reserve inputs of both sides) without computing anything. `evaluate` brings the top
+accumulator up to date for each perspective. It starts from the nearest ancestor already
+computed and applies the recorded changes. If that perspective's king moved on the way, it
+rebuilds the accumulator from the refresh cache instead. The cache holds, per perspective and
+king square, the last accumulator built there and its board, so a rebuild applies only the
+squares that differ. If the evaluator is used on a position that is not the top of its stack
+(for example `eval` after a new `position`), it starts over from that position.
+
+**Kernels**, chosen at run time:
+
+| `NnueMode` | First layer | Notes |
+|---|---|---|
+| `quantized` (default) | AVX-512 VNNI byte dot products when the CPU has them, else AVX2 | |
+| `avx2` | AVX2 (`maddubs` + `madd`) | |
+| `portable` | plain Rust | the reference for the integer path |
+| `float` | float, recomputed every node | the reference for the network |
+
+All integer modes give identical results, because integer sums don't depend on their order
+and no intermediate step can saturate (a pair of byte products is at most 2·127·127 < 32768).
+The tests check this: random walks with take-backs compare every incremental accumulator with
+one computed from scratch, and searches give the same move, score and node count in every
+integer mode. Quantized values stay within a few centipawns of float. Tools:
+
+```sh
+target/release/sk-nnue quant g1.nnue round1.val.bin   # shifts, error against float
+target/release/sk-nnue speed g1.nnue                  # kernel timings
+target/release/stockknight "setoption name EvalFile value g1.nnue" "bench 6"
+```
