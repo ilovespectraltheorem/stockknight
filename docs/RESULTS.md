@@ -33,3 +33,29 @@ Observations:
   Better evaluations (trained networks) should convert more of these; the draw rate is the
   number to watch from generation to generation.
 - 10% of recorded best moves are drops; a position has 1.45 pawns in their enemy half on average.
+
+## G1, the first network (Phase 3), 30 Oct 2026
+
+Trained on the pilot round (1,189,210 positions), validated on its 10,980 held-out positions.
+256-32-32, K 470 (fitted), λ 0.75, CPU, 12 epochs (early stop; best epoch 8), 11 minutes.
+
+| | G0 | G1 |
+|---|---|---|
+| Validation loss | 0.005135 | 0.004010 |
+| Error against game results (`result_mse`) | 0.0594 | 0.0518 |
+
+Rust and PyTorch outputs differ by at most 9.1e-7.
+
+Gate, G1 vs G0 at 5,000 nodes per move, 400 games (200 openings, colours swapped), seed 11:
+
+| | |
+|---|---|
+| Result for G1 | +201 =133 −66, score 0.669 |
+| Elo | **+122** (95% interval +94 to +152) |
+| Endings | checkmate 50%, length cap 23%, stalemate 15%, bare kings 8%, threefold 2%, adjudication 2% |
+| Speed | G1 101k nodes/s (float, recomputed every node), G0 1.44M nodes/s |
+
+G1 is clearly stronger than G0 at equal nodes, though below the +150 hoped for in the plan.
+Validation loss stopped improving after epoch 8, so more data (the generation loop) is the main
+lever. At equal time G1 is not yet stronger: it searches 14× fewer nodes per second until
+Phase 4 makes inference incremental and quantized.

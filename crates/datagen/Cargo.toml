@@ -9,3 +9,4 @@ sk-core = { path = "../core" }
 sk-eval = { path = "../eval" }
 sk-search = { path = "../search" }
 sk-data = { path = "../data" }
+sk-nnue = { path = "../nnue" }

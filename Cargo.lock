@@ -20,6 +20,7 @@ dependencies = [
  "sk-core",
  "sk-data",
  "sk-eval",
+ "sk-nnue",
  "sk-search",
 ]
 
@@ -39,6 +40,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sk-nnue"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+ "sk-data",
+ "sk-eval",
+]
+
+[[package]]
 name = "sk-search"
 version = "0.1.0"
 dependencies = [
@@ -52,5 +62,6 @@ version = "0.1.0"
 dependencies = [
  "sk-core",
  "sk-eval",
+ "sk-nnue",
  "sk-search",
 ]

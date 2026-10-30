@@ -1,0 +1,10 @@
+[package]
+name = "sk-nnue"
+version.workspace = true
+edition.workspace = true
+description = "Network inputs, the .nnue file format and network evaluation"
+
+[dependencies]
+sk-core = { path = "../core" }
+sk-eval = { path = "../eval" }
+sk-data = { path = "../data" }
