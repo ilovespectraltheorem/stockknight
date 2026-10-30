@@ -3,6 +3,8 @@
     python -m skpy.loop init <dir> [--import-pilot runs/pilot] [--set key=value]...
     python -m skpy.loop run <dir> [--until g4] [--generations N]
     python -m skpy.loop report <dir>
+    python -m skpy.loop reopen <dir> <model> [--set key=value]...   decide a model again, e.g.
+        with a higher gate_max_games: its gate continues from the games already played
 
 One generation, with teacher T (the newest accepted model):
 
@@ -337,6 +339,26 @@ def init(a):
     log(f"league created at {root}")
 
 
+def reopen(lg, a):
+    """Send the newest generation back to its gate (its games so far still count)."""
+    g = lg.state["generations"][-1]
+    if g["name"] != a.model or g["step"] != "done":
+        raise SystemExit(f"only the newest finished generation can be reopened ({g['name']}, {g['step']})")
+    for kv in a.set or []:
+        k, v = kv.split("=", 1)
+        if k not in DEFAULTS:
+            raise SystemExit(f"unknown setting {k}")
+        lg.state["config"][k] = parse_value(v)
+    if g.get("decision") == "accepted":
+        lg.state["teacher"] = g["teacher"]
+    g["step"] = "gate"
+    g.pop("decision", None)
+    g.setdefault("reopened", []).append(now())
+    lg.model(g["name"])["status"] = "candidate"
+    lg.save()
+    log(f"{g['name']} reopened at its gate; settings {lg.state['config']}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -350,10 +372,16 @@ def main():
     p.add_argument("--generations", type=int, default=0, help="at most this many new generations")
     p = sub.add_parser("report")
     p.add_argument("dir")
+    p = sub.add_parser("reopen")
+    p.add_argument("dir")
+    p.add_argument("model")
+    p.add_argument("--set", action="append")
     a = ap.parse_args()
     if a.cmd == "init":
         return init(a)
     lg = League(a.dir)
+    if a.cmd == "reopen":
+        return reopen(lg, a)
     if a.cmd == "report":
         lg.write_report()
         return print((lg.root / "report.md").read_text())

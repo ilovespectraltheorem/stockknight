@@ -27,7 +27,7 @@ trained network G1 (Phase 3) and fast quantized network inference (Phase 4) foll
 | `crates/match` (`sk-match`) | Engine-vs-engine matches: openings, parallel games, adjudication, Elo, SPRT, JSON |
 | `crates/data` (`sk-data`), `crates/datagen` (`sk-datagen`) | Training records (`docs/DATA.md`) and self-play data generation |
 | `crates/nnue` (`sk-nnue`) | Network inputs, `.nnue` files, float reference, quantized incremental inference (`docs/NNUE.md`) |
-| `python/skpy` | Record loading and the PyTorch trainer |
+| `python/skpy` | Record loading, the PyTorch trainer, league maths and the generation loop (`docs/LEAGUE.md`) |
 
 ```sh
 cargo build --release --offline && cargo test --release --offline
