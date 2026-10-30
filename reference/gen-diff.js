@@ -2,7 +2,7 @@
 // Writes testdata/diff-positions.txt: random positions with what the Rust port must reproduce.
 // Usage: node reference/gen-diff.js [count]
 // Line format (tab-separated): FEN, legal moves (UCI, generation order, space-separated),
-// status, in check (0/1), perft(2), G0 value.
+// status, in check (0/1), perft(2), G0 value, Zobrist key (16 hex digits, hi then lo).
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,6 +15,7 @@ const rnd = () => {
   return seed / 2 ** 32;
 };
 
+const hex = n => n.toString(16).padStart(8, '0');
 const lines = [];
 while (lines.length < count) {
   const pos = new E.Position();
@@ -29,7 +30,7 @@ while (lines.length < count) {
   const st = fresh.status();
   const status = st.state === 'ongoing' ? 'ongoing' : st.state === 'draw' ? `draw:${st.reason}` : `win:${st.winner ? 'b' : 'w'}:${st.reason}`;
   const legal = fresh.legalMoves().map(m => fresh.moveToUci(m)).join(' ');
-  lines.push([fresh.fen(), legal, status, fresh.inCheck() ? 1 : 0, fresh.perft(2), E.evaluate(fresh)].join('\t'));
+  lines.push([fresh.fen(), legal, status, fresh.inCheck() ? 1 : 0, fresh.perft(2), E.evaluate(fresh), hex(fresh.hashHi) + hex(fresh.hashLo)].join('\t'));
 }
 
 const out = path.join(__dirname, '..', 'testdata', 'diff-positions.txt');

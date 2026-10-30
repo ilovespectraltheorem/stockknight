@@ -1,0 +1,10 @@
+[package]
+name = "stockknight"
+version.workspace = true
+edition.workspace = true
+description = "The StockKnight engine (UCI-like protocol)"
+
+[dependencies]
+sk-core = { path = "../core" }
+sk-eval = { path = "../eval" }
+sk-search = { path = "../search" }

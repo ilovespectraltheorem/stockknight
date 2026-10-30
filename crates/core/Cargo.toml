@@ -1,0 +1,5 @@
+[package]
+name = "sk-core"
+version.workspace = true
+edition.workspace = true
+description = "KnightChess rules: position, moves, legality, outcome, FEN, hashing, perft"

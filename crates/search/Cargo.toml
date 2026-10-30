@@ -1,0 +1,9 @@
+[package]
+name = "sk-search"
+version.workspace = true
+edition.workspace = true
+description = "Alpha-beta search, generic over the evaluator"
+
+[dependencies]
+sk-core = { path = "../core" }
+sk-eval = { path = "../eval" }

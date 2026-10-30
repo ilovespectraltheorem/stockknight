@@ -1,0 +1,8 @@
+[package]
+name = "sk-eval"
+version.workspace = true
+edition.workspace = true
+description = "The Evaluator trait and the hand-written evaluation G0"
+
+[dependencies]
+sk-core = { path = "../core" }
