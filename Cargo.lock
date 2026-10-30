@@ -7,6 +7,23 @@ name = "sk-core"
 version = "0.1.0"
 
 [[package]]
+name = "sk-data"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+]
+
+[[package]]
+name = "sk-datagen"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+ "sk-data",
+ "sk-eval",
+ "sk-search",
+]
+
+[[package]]
 name = "sk-eval"
 version = "0.1.0"
 dependencies = [
