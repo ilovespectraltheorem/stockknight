@@ -8,3 +8,6 @@ description = "Network inputs, the .nnue file format and network evaluation"
 sk-core = { path = "../core" }
 sk-eval = { path = "../eval" }
 sk-data = { path = "../data" }
+
+[dev-dependencies]
+sk-search = { path = "../search" }

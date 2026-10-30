@@ -46,6 +46,7 @@ dependencies = [
  "sk-core",
  "sk-data",
  "sk-eval",
+ "sk-search",
 ]
 
 [[package]]

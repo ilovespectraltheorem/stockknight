@@ -9,7 +9,9 @@ to play and evaluate games.
 ## Status
 
 Workstreams A (rules freeze) and B (Rust engine) are in place, and the Phase 1 gate passes:
-the Rust engine equals the JS reference move for move.
+the Rust engine equals the JS reference move for move. Self-play data (Phase 2), the first
+trained network G1 (Phase 3) and fast quantized network inference (Phase 4) follow; see
+`docs/RESULTS.md`.
 
 | Path | Contents |
 |---|---|
@@ -23,6 +25,9 @@ the Rust engine equals the JS reference move for move.
 | `crates/search` (`sk-search`) | Alpha-beta search, generic over the evaluator; strength levels |
 | `crates/engine` (`stockknight`) | The engine binary (UCI-like protocol) |
 | `crates/match` (`sk-match`) | Engine-vs-engine matches: openings, parallel games, adjudication, Elo, SPRT, JSON |
+| `crates/data` (`sk-data`), `crates/datagen` (`sk-datagen`) | Training records (`docs/DATA.md`) and self-play data generation |
+| `crates/nnue` (`sk-nnue`) | Network inputs, `.nnue` files, float reference, quantized incremental inference (`docs/NNUE.md`) |
+| `python/skpy` | Record loading and the PyTorch trainer |
 
 ```sh
 cargo build --release --offline && cargo test --release --offline

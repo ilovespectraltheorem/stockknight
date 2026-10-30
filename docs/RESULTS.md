@@ -59,3 +59,31 @@ G1 is clearly stronger than G0 at equal nodes, though below the +150 hoped for i
 Validation loss stopped improving after epoch 8, so more data (the generation loop) is the main
 lever. At equal time G1 is not yet stronger: it searches 14× fewer nodes per second until
 Phase 4 makes inference incremental and quantized.
+
+## Fast inference (Phase 4), 30 Oct 2026
+
+G1 run quantized and incremental (`docs/NNUE.md`), on a 4-core Xeon at 2.1 GHz with AVX-512 VNNI.
+
+`stockknight bench 6` (12 positions, one thread):
+
+| Evaluation | Nodes/s |
+|---|---|
+| G0 | 2.49M |
+| G1 quantized (VNNI) | 1.56–1.62M |
+| G1 quantized (AVX2 only) | 1.49M |
+| G1 portable integer path | 0.40M |
+| G1 float, recomputed every node (Phase 3) | 0.14M |
+
+Quantization error against float on the 10,980 validation positions: mean 2.6 cp, max 13 cp.
+
+Matches, 400 games each (200 openings, colours swapped), 4 at a time:
+
+| Match | Result | Elo (95% interval) |
+|---|---|---|
+| G1 quantized vs G1 float, 5,000 nodes per move, seed 11 | +135 =142 −123, score 0.515 | +10 (−17 to +38) |
+| G1 vs G0, 40 ms per move, seed 12 | +218 =129 −53, score 0.706 | **+152** (+124 to +183) |
+
+Quantization costs no measurable strength. At equal time, G1 is now well ahead of G0: about 11×
+faster than float made its nodes-per-move deficit small (1.06M vs 1.68M nodes/s in the match, 4
+games in parallel). 43% of the timed games ended by adjudication, since a 40 ms search finds
+decisive material swings quickly.
