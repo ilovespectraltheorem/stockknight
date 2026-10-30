@@ -4,3 +4,4 @@ runs/
 wheelhouse/
 __pycache__/
 node_modules/
+*.bin

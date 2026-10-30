@@ -1,0 +1,8 @@
+[package]
+name = "sk-data"
+version.workspace = true
+edition.workspace = true
+description = "The 24-byte training record"
+
+[dependencies]
+sk-core = { path = "../core" }
