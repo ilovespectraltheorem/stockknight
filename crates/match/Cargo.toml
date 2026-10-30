@@ -1,0 +1,9 @@
+[package]
+name = "sk-match"
+version.workspace = true
+edition.workspace = true
+description = "Engine-versus-engine matches: openings, parallel games, adjudication, Elo, SPRT"
+
+[dependencies]
+sk-core = { path = "../core" }
+sk-eval = { path = "../eval" }
