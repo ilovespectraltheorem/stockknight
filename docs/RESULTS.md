@@ -87,3 +87,33 @@ Quantization costs no measurable strength. At equal time, G1 is now well ahead o
 faster than float made its nodes-per-move deficit small (1.06M vs 1.68M nodes/s in the match, 4
 games in parallel). 43% of the timed games ended by adjudication, since a 40 ms search finds
 decisive material swings quickly.
+
+## The generation loop, G1 → G4 (Phase 5), 30 Oct 2026
+
+`python -m skpy.loop` (see `docs/LEAGUE.md`), started from the pilot round and G1. Each round
+is 1.2M positions made by the teacher at 5,000 nodes per move. Each network trains on the newest
+3 rounds, starting from its teacher's weights. The gate is an SPRT [0, 10] Elo against the
+teacher, and league games are against every older model. All games use 5,000 nodes per move.
+4 cores, about 40 minutes per generation (data 25, training 8–10, games 5).
+
+| Model | Teacher | Elo vs G0 (± 1 s.e.) | Gate against teacher (W-D-L) | Decision |
+|---|---|---|---|---|
+| G1 | G0 | +130 (21) | 105-64-31 | accepted |
+| G2 | G1 | +201 (22) | 177-136-87 | accepted |
+| G3 | G2 | +261 (23) | 176-124-100 | accepted |
+| G4 | G3 | +279 (23) | 644-608-548 | accepted after 1,800 games |
+
+Ratings are joint maximum-likelihood over all 2,880 league games. Each model scores above 50%
+against every older one. G4 hit the original 1,600-game cap undecided (LLR 2.46 of the 2.94
+needed). Its gate was reopened with a 3,200-game cap and passed at 1,800 games.
+
+| Round | Teacher | White | Draw | Black |
+|---|---|---|---|---|
+| 1 | G0 | 38.1% | 39.4% | 22.5% |
+| 2 | G1 | 39.1% | 38.2% | 22.7% |
+| 3 | G2 | 41.1% | 34.9% | 23.9% |
+| 4 | G3 | 40.8% | 35.5% | 23.7% |
+
+The gain per generation is shrinking: +130, +71, +60, +18. Stronger teachers draw less (39% →
+35%), but the White advantage stays. With the window fixed at 3 rounds of 1.2M positions, the
+next levers are bigger rounds and deeper label searches. Those are for the harness phase.

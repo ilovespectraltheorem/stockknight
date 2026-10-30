@@ -20,7 +20,7 @@ import torch
 
 from . import RULESET, binary
 from .check_nnue import max_difference
-from .nnue import SkNet, batch_torch, save_nnue
+from .nnue import SkNet, batch_torch, load_nnue, save_nnue
 from .records import fit_k, load
 
 
@@ -75,6 +75,7 @@ def main():
     ap.add_argument("--l1", type=int, default=32)
     ap.add_argument("--l2", type=int, default=32)
     ap.add_argument("--output-scale", type=float, default=600.0)
+    ap.add_argument("--init-from", default="", help="start from this network's weights")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--name", default="")
@@ -108,6 +109,9 @@ def main():
     print(f"G0 baseline: val_loss {g0_stats['val_loss']:.6f} result_mse {g0_stats['result_mse']:.5f}", flush=True)
 
     net = SkNet(a.ft, a.l1, a.l2, a.output_scale)
+    if a.init_from:
+        net.load_state_dict(load_nnue(a.init_from).state_dict())
+        print(f"starting from {a.init_from}", flush=True)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=a.decay_every, gamma=a.decay)
     history, best, best_epoch, start_epoch = [], float("inf"), 0, 0
