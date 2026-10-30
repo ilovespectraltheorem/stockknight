@@ -1,0 +1,79 @@
+# Server-sized run: 5M-position rounds growing 25%, a 4-round window capped at 60M positions,
+# a tighter gate with more games, more league games. Stops by plateau.
+# StockKnight run configuration. Edit freely: it is re-read between steps.
+
+[run]
+description = "large run"
+seed = 1
+
+[hardware]
+threads = 0
+train_threads = 0
+min_free_disk_gb = 2.0
+
+[datagen]
+positions = 5000000
+growth = 0.25
+max_positions = 15000000
+shard_minutes = 20.0
+shard_positions = 200000
+nodes = 5000
+random_plies = 8
+opening_limit = 600
+max_plies = 400
+adjudicate = 1500
+adjudicate_plies = 8
+quiet_draw = 120
+record_quiet_limit = 40
+val_fraction = 0.01
+
+[training]
+window_rounds = 4
+window_positions = 60000000
+init = "teacher"
+lambda = 0.75
+epochs = 25
+patience = 3
+batch = 16384
+lr = 0.001
+lr_decay = 0.3
+decay_every = 5
+K = 0.0
+ft = 256
+l1 = 32
+l2 = 32
+output_scale = 600.0
+
+[match]
+condition = "nodes 5000"
+concurrency = 0
+chunk_games = 200
+opening_plies = 8
+max_plies = 400
+adjudicate = 1500
+
+[gate]
+mode = "sprt"
+elo0 = 0.0
+elo1 = 6.0
+min_games = 40
+max_games = 4000
+strict = true
+
+[league]
+recent = 400
+decay = 0.5
+minimum = 100
+backfill = true
+
+[stop]
+generations = 0
+hours = 0.0
+plateau = 3
+
+[storage]
+keep_shards = false
+keep_windows = false
+keep_checkpoints = false
+keep_rounds = 0
+keep_game_logs = false

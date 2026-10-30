@@ -117,3 +117,15 @@ needed). Its gate was reopened with a 3,200-game cap and passed at 1,800 games.
 The gain per generation is shrinking: +130, +71, +60, +18. Stronger teachers draw less (39% →
 35%), but the White advantage stays. With the window fixed at 3 rounds of 1.2M positions, the
 next levers are bigger rounds and deeper label searches. Those are for the harness phase.
+
+## The training harness (Phase 6), 30 Oct 2026
+
+`./sk smoke` passes all 41 checks in about a minute. It covers an SPRT generation, a live config
+edit, a graceful stop mid-data, Ctrl-C mid-training, a resume to three generations, export and redo.
+It caught one real bug: an interrupt during the trainer's checkpoint save left a corrupt
+`checkpoint.pt`, which the resume then failed to load. Checkpoints are now saved atomically.
+
+The large run (`runs/large`, `configs/large.toml`) continues from the Phase 5 league (G1–G4,
+imported). Rounds start at 5M positions and grow 25% (up to 15M), with a 4-round window and a
+[0, 6] gate of up to 4,000 games. It runs until 3 rejections in a row. `./sk doctor --bench`
+estimates 1.6–4.9 hours of data generation per generation on this 4-core machine.

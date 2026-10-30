@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--name", default="")
     ap.add_argument("--fresh", action="store_true")
+    ap.add_argument("--keep-checkpoint", action="store_true")
     a = ap.parse_args()
 
     out = Path(a.out)
@@ -169,8 +170,9 @@ def main():
         torch.save(
             {"net": net.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(), "history": history,
              "best": best, "best_epoch": best_epoch, "epoch": epoch, "rng": rng, "torch_rng": torch.get_rng_state()},
-            ckpt,
+            f"{ckpt}.tmp",
         )
+        os.replace(f"{ckpt}.tmp", ckpt)  # an interrupted save must not leave a broken checkpoint
         if epoch - best_epoch >= a.patience:
             print(f"no improvement for {a.patience} epochs; stopping", flush=True)
             break
@@ -179,11 +181,13 @@ def main():
     print(f"Rust vs PyTorch on best.nnue: max difference {diff:.2e}", flush=True)
     if diff > 1e-3:
         raise SystemExit("best.nnue gives different results in Rust and PyTorch")
-    ckpt.unlink(missing_ok=True)
+    if not a.keep_checkpoint:
+        ckpt.unlink(missing_ok=True)
     write_json(out / "summary.json", {
         "ruleset": RULESET, "train_positions": int(n), "val_positions": int(val.shape[0]), "K": K, "lambda": a.lam,
         "best_epoch": best_epoch, "epochs_run": len(history), "best": history[best_epoch - 1] if best_epoch else None,
         "g0": g0_stats, "architecture": f"{a.ft}-{a.l1}-{a.l2}", "rust_max_difference": diff,
+        "init_from": a.init_from or None,
     })
 
 
