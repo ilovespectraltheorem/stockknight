@@ -1,0 +1,135 @@
+# StockKnight run configuration. Edit freely: it is re-read between steps.
+
+[run]
+# Free text shown in reports. Default "".
+description = ""
+# Base seed; every shard, chunk and training run derives its seed from it. Default 1.
+seed = 1
+
+[hardware]
+# Threads for data generation and games (0 = all cores). Default 0.
+threads = 0
+# PyTorch threads (0 = PyTorch's choice). Default 0.
+train_threads = 0
+# Stop the run when free disk falls below this. Default 2.0.
+min_free_disk_gb = 2.0
+
+[datagen]
+# Training positions per round (first round). Default 1200000.
+positions = 1200000
+# Each round is this fraction larger than the one before. Default 0.0.
+growth = 0.0
+# Upper limit on a round's size (0 = none). Default 0.
+max_positions = 0
+# Length of one shard of data generation, the unit an interruption can lose. Default 10.0.
+shard_minutes = 10.0
+# Size of the first shard, before the speed is known. Default 100000.
+shard_positions = 100000
+# Nodes per move in self-play. Default 5000.
+nodes = 5000
+# Random opening plies (not recorded). Default 8.
+random_plies = 8
+# Discard openings whose first search scores beyond this (cp). Default 600.
+opening_limit = 600
+# Game length cap (a draw). Default 400.
+max_plies = 400
+# Adjudicate when one side is beyond this (cp). Default 1500.
+adjudicate = 1500
+# ... for this many plies. Default 8.
+adjudicate_plies = 8
+# Draw after this many quiet plies. Default 120.
+quiet_draw = 120
+# Do not record positions this many quiet plies into a shuffle. Default 40.
+record_quiet_limit = 40
+# Share of games kept for validation. Default 0.01.
+val_fraction = 0.01
+
+[training]
+# Train on the newest this many rounds. Default 3.
+window_rounds = 3
+# Upper limit on the training window, newest kept (0 = none). Default 0.
+window_positions = 0
+# Start from the teacher's weights, or from random weights (teacher | fresh). Default "teacher".
+init = "teacher"
+# Weight of the search score against the game result. Default 0.75.
+lambda = 0.75
+# Most epochs. Default 25.
+epochs = 25
+# Stop after this many epochs without improvement. Default 3.
+patience = 3
+# Batch size. Default 16384.
+batch = 16384
+# Adam learning rate. Default 0.001.
+lr = 0.001
+# Learning rate factor every decay_every epochs. Default 0.3.
+lr_decay = 0.3
+# Epochs between learning rate decays. Default 5.
+decay_every = 5
+# Score scale of the sigmoid (0 = fit on the data). Default 0.0.
+K = 0.0
+# Accumulator size. Default 256.
+ft = 256
+# First hidden layer. Default 32.
+l1 = 32
+# Second hidden layer. Default 32.
+l2 = 32
+# Centipawns per unit of network output. Default 600.0.
+output_scale = 600.0
+
+[match]
+# Search limit of every rated game: 'nodes N', 'movetime MS' or 'depth N'; frozen once the run has games. Default "nodes 5000".
+condition = "nodes 5000"
+# Games in parallel (0 = all cores). Default 0.
+concurrency = 0
+# Games per chunk, the unit an interruption can lose (even). Default 200.
+chunk_games = 200
+# Random opening plies. Default 8.
+opening_plies = 8
+# Game length cap. Default 400.
+max_plies = 400
+# Adjudication threshold (cp). Default 1500.
+adjudicate = 1500
+
+[gate]
+# 'sprt': a new model must beat its teacher; 'none': every model is accepted (sprt | none). Default "sprt".
+mode = "sprt"
+# SPRT null hypothesis (Elo over the teacher). Default 0.0.
+elo0 = 0.0
+# SPRT alternative hypothesis. Default 10.0.
+elo1 = 10.0
+# Fewest games before the SPRT may decide. Default 40.
+min_games = 40
+# Most gate games; undecided at this point means rejected. Default 1600.
+max_games = 1600
+# Also reject a model scoring significantly below 50% against any older accepted model. Default true.
+strict = true
+
+[league]
+# League games against the previous model. Default 200.
+recent = 200
+# Factor per step further back. Default 0.5.
+decay = 0.5
+# Fewest games against any older model. Default 60.
+minimum = 60
+# Before each generation, play league games the schedule owes. Default true.
+backfill = true
+
+[stop]
+# Stop after this many generations in the run (0 = no limit). Default 0.
+generations = 0
+# Stop after this many hours of one invocation (0 = no limit). Default 0.0.
+hours = 0.0
+# Stop after this many rejections in a row (0 = never). Default 3.
+plateau = 3
+
+[storage]
+# Keep data shards after a round is merged. Default false.
+keep_shards = false
+# Keep merged training windows. Default false.
+keep_windows = false
+# Keep trainer checkpoints. Default false.
+keep_checkpoints = false
+# Keep only the newest this many rounds (0 = all; never fewer than the window). Default 0.
+keep_rounds = 0
+# Keep per-game match logs. Default true.
+keep_game_logs = true

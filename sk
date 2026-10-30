@@ -1,0 +1,9 @@
+#!/bin/sh
+# The StockKnight training harness: ./sk <command> ... (./sk --help)
+# SK_PYTHON: interpreter (default .venv/bin/python, else python3); SK_BIN: binaries; SK_RUNS: runs folder.
+here="$(cd "$(dirname "$0")" && pwd)"
+py="${SK_PYTHON:-}"
+if [ -z "$py" ]; then
+  if [ -x "$here/.venv/bin/python" ]; then py="$here/.venv/bin/python"; else py=python3; fi
+fi
+PYTHONPATH="$here/python${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m skpy.harness "$@"
