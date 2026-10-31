@@ -146,7 +146,21 @@ def cmd_status(a):
     if not a.run:
         return cmd_list(a)
     run = open_run(a.run)
-    print(status_text(run, C.resolve(run.state["config"])))
+    cfg = C.resolve(run.state["config"])
+    if a.brief:
+        from .watch import brief
+        print(brief(run, cfg))
+        return
+    print(status_text(run, cfg))
+
+
+def cmd_watch(a):
+    from .watch import watch
+    run = open_run(a.run)
+    code, lines = watch(run, lambda r: C.resolve(r.state["config"]), every=a.every, stall_minutes=a.stall,
+                        max_minutes=a.max, interval=a.interval)
+    print("\n".join(lines), flush=True)
+    sys.exit(code)
 
 
 def cmd_list(a):
@@ -414,6 +428,14 @@ def main(argv=None):
     p.add_argument("--force", action="store_true")
     p = sub.add_parser("status", help="progress, ratings, warnings")
     p.add_argument("run", nargs="?")
+    p.add_argument("--brief", action="store_true", help="one line")
+    p = sub.add_parser("watch", help="block until a milestone, alert or --max; exit 0 milestone, 1 heartbeat, "
+                                     "2 alert, 3 run ended")
+    p.add_argument("run")
+    p.add_argument("--every", choices=["quarter", "generation"], default="quarter")
+    p.add_argument("--stall", type=float, default=45.0, help="minutes without progress before an alert")
+    p.add_argument("--max", type=float, default=115.0, help="minutes before a heartbeat exit")
+    p.add_argument("--interval", type=float, default=30.0, help="seconds between checks")
     sub.add_parser("list", help="all runs")
     p = sub.add_parser("stop", help="stop after the current unit (--now: interrupt)")
     p.add_argument("run")

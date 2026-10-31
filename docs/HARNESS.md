@@ -20,7 +20,8 @@ folder, default `runs/`).
 |---|---|
 | `init <run> [--config f] [--set k=v]… [--import-league dir] [--link] [--description t]` | Create a run (`--link` links imported data instead of copying it) |
 | `run <run> [--generations N] [--hours H] [--set k=v]… [--detach] [--force]` | Run until a stop condition |
-| `status [<run>]`, `list` | Progress, ratings, warnings, disk and events, or all runs |
+| `status [<run>] [--brief]`, `list` | Progress, ratings, warnings, disk and events, or all runs; `--brief` prints one line |
+| `watch <run> [--every quarter\|generation] [--stall M] [--max M] [--interval S]` | Block until a milestone or a problem, print two lines, exit (see below) |
 | `stop <run> [--now]` | Stop after the current unit, or interrupt now |
 | `log <run> [-n N] [-f]` | Harness log |
 | `report <run>` | Rewrite `report.md` and `dashboard.html` |
@@ -31,6 +32,27 @@ folder, default `runs/`).
 | `redo <run> train\|gate\|league` | Redo a step of the newest generation, and the steps after it; its old games go to `matches/discarded/` |
 | `abandon <run>` | Give up the generation in progress |
 | `build`, `test [--rust] [--python]`, `doctor [--bench]`, `smoke [--keep]`, `tool <name> …` | Machine and maintenance |
+
+## Watching a run cheaply
+
+`sk watch` is for whoever supervises a long run, a person or an agent. Start it in the background and
+wait for it to exit, instead of polling `sk status`. It checks the run every `--interval` seconds (30)
+and exits with two lines (what happened, then the `status --brief` line):
+
+| Exit | Meaning |
+|---|---|
+| 0 | Milestone: the generation crossed a quarter (`--every quarter`, the default) or was decided |
+| 1 | Heartbeat: `--max` minutes (115) passed with nothing to report; the run is healthy |
+| 2 | Alert: an `error`, `crash` or `config_error` event, no progress for `--stall` minutes (45), or the harness died without `run_end` |
+| 3 | The run ended (`run_end`): plateau, stop request or a limit |
+
+Quarters are estimated from the step times of the newest decided generation: positions written
+during data, epochs against the expected early stop during training. Watching is read-only.
+
+```sh
+./sk watch large --every generation   # one exit per generation, plus alerts
+./sk status large --brief             # large · running · g9 train 81% (epoch 3, best val 0.00471) · teacher g8 +439 · 19 GB free
+```
 
 ## Configuration (`run.toml`)
 
@@ -210,7 +232,7 @@ The league's condition, gate and schedule override the chosen config. `--set` ov
   - automatic values, round sizes and shard sizing;
   - window selection, info aggregation and condition arguments;
   - plateau and league debts, seeds, locks, torn event lines and the storage policy.
-- **`sk smoke`** (41 checks) runs, in order:
+- **`sk smoke`** (43 checks) runs, in order:
   - g1 with the SPRT gate;
   - a live edit to `gate.mode = "none"`;
   - a graceful stop during data generation;
