@@ -65,6 +65,18 @@ impl Sig {
         }
     }
 
+    /// The one of this signature and its colour swap that has a stored table, and whether it
+    /// is the swapped one. A position of the other is looked up with colours swapped and the
+    /// board turned upside down (`index::flip`), which the rules treat identically.
+    pub fn canonical(&self) -> (Sig, bool) {
+        let f = self.flipped();
+        if f < *self {
+            (f, true)
+        } else {
+            (*self, false)
+        }
+    }
+
     /// `KRvKP`, with reserves in brackets: `KQ[P]vK[RB]`.
     pub fn name(&self) -> String {
         let mut out = String::new();
@@ -167,6 +179,14 @@ impl Sig {
         out.dedup();
         out
     }
+}
+
+/// The signatures with stored tables (one of each colour-swapped pair), in solving order.
+pub fn canonical_sigs(max: u32) -> Vec<Sig> {
+    all_sigs(max)
+        .into_iter()
+        .filter(|s| !s.canonical().1)
+        .collect()
 }
 
 /// Every feasible signature with at most `max` pieces, in solving order.

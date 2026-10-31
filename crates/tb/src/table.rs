@@ -5,20 +5,22 @@
 //! (0 = no legal move now). 0 means a draw and `INVALID` an index that is not a legal position.
 //!
 //! File: `SKTB`, u32 format, the ruleset id and the signature name (each u16 length + bytes),
-//! u64 entry count, then the values as u16 little endian.
+//! u64 entry count, u8 value width, then the values. Width 1 (a byte per value, 255 invalid) is
+//! used when the longest distance is at most 253, otherwise width 2 (u16 little endian).
+//! Format 1 files (no width byte, always u16) still load.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sk_core::{Position, RULESET};
 
-use crate::index::Layout;
+use crate::index::{flip, Layout};
 use crate::sig::Sig;
 
 pub const DRAW: u16 = 0;
 pub const INVALID: u16 = u16::MAX;
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Wdl {
@@ -68,8 +70,14 @@ impl Table {
             out.extend_from_slice(s.as_bytes());
         }
         out.extend_from_slice(&(self.data.len() as u64).to_le_bytes());
-        for v in &self.data {
-            out.extend_from_slice(&v.to_le_bytes());
+        let narrow = self.data.iter().all(|&v| v == INVALID || v <= 254);
+        out.push(if narrow { 1 } else { 2 });
+        for &v in &self.data {
+            if narrow {
+                out.push(if v == INVALID { 255 } else { v as u8 });
+            } else {
+                out.extend_from_slice(&v.to_le_bytes());
+            }
         }
         std::fs::File::create(&tmp)?.write_all(&out)?;
         std::fs::rename(tmp, path)
@@ -91,7 +99,8 @@ impl Table {
         if take(4)? != b"SKTB" {
             return Err(bad("not a tablebase file"));
         }
-        if u32::from_le_bytes(take(4)?.try_into().unwrap()) != FORMAT {
+        let format = u32::from_le_bytes(take(4)?.try_into().unwrap());
+        if format != 1 && format != FORMAT {
             return Err(bad("unknown format"));
         }
         let mut text = || -> Result<String, String> {
@@ -112,39 +121,82 @@ impl Table {
         if n != layout.size {
             return Err(bad("wrong size"));
         }
-        let raw = take(n as usize * 2)?;
-        let data = raw
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
-            .collect();
+        let width = if format == 1 { 2 } else { take(1)?[0] };
+        let data = match width {
+            1 => take(n as usize)?
+                .iter()
+                .map(|&b| if b == 255 { INVALID } else { b as u16 })
+                .collect(),
+            2 => take(n as usize * 2)?
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect(),
+            _ => return Err(bad("unknown value width")),
+        };
         Ok(Table { layout, data })
     }
 }
 
-/// A set of solved tables.
+/// A set of solved tables, keyed by canonical signature.
 #[derive(Default)]
 pub struct Tables {
     pub map: HashMap<Sig, Table>,
+    /// Where `ensure` loads missing tables from.
+    pub dir: Option<PathBuf>,
 }
 
 impl Tables {
-    pub fn load_dir(dir: &Path, sigs: &[Sig]) -> Result<Tables, String> {
-        let mut t = Tables::default();
-        for &s in sigs {
-            if dir.join(Table::file_name(&s)).exists() {
-                t.map.insert(s, Table::load(dir, s)?);
-            }
+    pub fn in_dir(dir: &Path) -> Tables {
+        Tables {
+            map: HashMap::new(),
+            dir: Some(dir.to_path_buf()),
         }
-        Ok(t)
     }
 
-    pub fn max_pieces(&self) -> u32 {
-        self.map.keys().map(|s| s.pieces()).max().unwrap_or(0)
+    pub fn has_file(&self, sig: &Sig) -> bool {
+        let s = sig.canonical().0;
+        self.map.contains_key(&s)
+            || self
+                .dir
+                .as_ref()
+                .is_some_and(|d| d.join(Table::file_name(&s)).exists())
+    }
+
+    /// Load the tables for `sigs` (any colour order) that are not loaded yet.
+    pub fn ensure(&mut self, sigs: &[Sig]) -> Result<(), String> {
+        for s in sigs {
+            let c = s.canonical().0;
+            if !self.map.contains_key(&c) {
+                let dir = self.dir.as_ref().ok_or("no tablebase folder")?;
+                self.map.insert(c, Table::load(dir, c)?);
+            }
+        }
+        Ok(())
+    }
+
+    /// Drop every loaded table not needed for `sigs` (any colour order).
+    pub fn keep_only(&mut self, sigs: &[Sig]) {
+        let keep: Vec<Sig> = sigs.iter().map(|s| s.canonical().0).collect();
+        self.map.retain(|s, _| keep.contains(s));
+    }
+
+    pub fn insert(&mut self, t: Table) {
+        self.map.insert(t.sig(), t);
+    }
+
+    /// Value of a board of signature `sig` with `side` to move, if its table is loaded.
+    pub fn value(&self, sig: &Sig, board: &[u8; 36], side: u8) -> Option<u16> {
+        let (c, flipped) = sig.canonical();
+        let t = self.map.get(&c)?;
+        Some(if flipped {
+            t.get(&flip(board), side ^ 1)
+        } else {
+            t.get(board, side)
+        })
     }
 
     /// Value of a position, or None when its table is not loaded.
     pub fn probe(&self, pos: &Position) -> Option<u16> {
-        let t = self.map.get(&Sig::of(pos))?;
-        Some(t.get(&pos.board, pos.side))
+        self.value(&Sig::of(pos), &pos.board, pos.side)
     }
 }

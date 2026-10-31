@@ -3,7 +3,7 @@
 `sk-tb` solves KnightChess endgames exactly. For every position of a material signature it stores
 the result with best play and the distance to the end of the game in plies. This is the endgame
 track of the plan (phases E0 to E5). E0 and E1 are done: indexing, the solver, and its
-verification up to 4 pieces.
+verification up to 4 pieces. E2, the 5-piece tables, is being generated.
 
 ## What a table holds
 
@@ -43,16 +43,19 @@ The rules are symmetric under a left-right mirror, so the white king is kept on 
 squares). An index is made of the side to move, the white king (18 squares), the black king (36),
 then, for each group of identical pieces, the rank of its set of squares in the combinatorial
 number system. Indices that do not decode to a legal position are stored as invalid: two pieces
-on one square, a pawn on its far rank, or the side not to move in check. The colour-swap symmetry
-is not used yet. `KRvKP` and `KPvKR` are separate tables with mirrored statistics, so a later
-format can halve the storage.
+on one square, a pawn on its far rank, or the side not to move in check. Colour swap is a symmetry too:
+turning the board upside down and swapping colours and the side to move gives a position the rules
+treat identically. So only one table of each pair is stored (`Sig::canonical`), for example `KPvKR`
+for both `KPvKR` and `KRvKP`. A probe into the other one flips the board (`index::flip`).
 
 ## Files
 
-`<signature>.sktb` holds `SKTB`, the format number (1), the ruleset id, the signature name, the
-entry count, and then one u16 per index (0 for a draw, distance + 1 when decided, 65535 for an
-invalid index). Loading checks the ruleset id, the name and the size. There is no compression
-yet; that is part of E2.
+`<signature>.sktb` holds `SKTB`, the format number (2), the ruleset id, the signature name, the
+entry count, a value width, and then the values. Width 1 is one byte per entry (0 for a draw,
+distance + 1, 255 for an invalid index) and is used whenever the longest distance is at most 253.
+Width 2 stores u16 values (65535 invalid). Loading checks the ruleset id, the name and the size,
+and also reads format 1 files. In memory a table is always u16. Commands load only the tables a
+signature leads to, so memory stays near the largest table plus its successors.
 
 ## Commands
 
@@ -85,15 +88,14 @@ Generation resumes: tables already in the folder are loaded, not solved again.
 
 ## Census
 
-| Pieces | Signatures | Index entries | Largest table |
-|---|---|---|---|
-| 2 | 1 | 1,296 | KvK |
-| 3 | 16 | 474,336 | KRvK and others (46,656) |
-| 4 | 130 | 84,935,952 | KRPvK and others (1.7M) |
-| 5 | 708 | 9.9 × 10^9 | 60M |
-| 6 | 2,891 | 8.4 × 10^11 | 2.2 × 10^9 |
+| Pieces | Signatures | Stored tables | Index entries stored | Largest table |
+|---|---|---|---|---|
+| 2 | 1 | 1 | 1,296 | KvK |
+| 3 | 16 | 8 | 237,168 | KRvK and others (46,656) |
+| 4 | 130 | 69 | 46,668,960 | KRPvK and others (1.7M) |
+| 5 | 708 | 354 | 4.9 × 10^9 | 60M |
+| 6 | 2,891 | 1,462 | 4.3 × 10^11 | 2.2 × 10^9 |
 
-The 6-piece set is about 1.7 TB at 2 bytes per index entry, or about 210 GB as 2-bit
-win/draw/loss. Colour-swap symmetry halves both, and compression should shrink them several times
-more, because most entries are invalid or long runs of draws. One worker solving the largest
-6-piece table needs about 4.4 GB of memory.
+At one byte per entry the 4-piece set takes 45 MB, the 5-piece set about 5 GB and the 6-piece set
+about 430 GB (about 108 GB as 2-bit win/draw/loss before compression). One worker solving the
+largest 6-piece table needs about 4.4 GB of memory for it, plus its successors.

@@ -38,6 +38,19 @@ pub const fn mirror(sq: u8) -> u8 {
     rank_of(sq) * 6 + 5 - file_of(sq)
 }
 
+/// The board upside down with colours swapped. With the side to move swapped too, the rules
+/// see the same position (White's half becomes Black's and pawns run the other way).
+pub fn flip(board: &[u8; 36]) -> [u8; 36] {
+    let mut out = [0u8; 36];
+    for sq in 0..36u8 {
+        let c = board[sq as usize];
+        if c != 0 {
+            out[((5 - rank_of(sq)) * 6 + file_of(sq)) as usize] = c ^ 8;
+        }
+    }
+    out
+}
+
 /// Rank of a sorted set of squares.
 fn rank_set(sqs: &[u8]) -> u64 {
     sqs.iter()

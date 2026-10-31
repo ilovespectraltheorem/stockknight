@@ -12,5 +12,5 @@ pub mod sig;
 pub mod solve;
 pub mod table;
 
-pub use sig::{all_sigs, Sig};
+pub use sig::{all_sigs, canonical_sigs, Sig};
 pub use table::{decode_value, Table, Tables, Wdl};

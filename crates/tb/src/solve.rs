@@ -124,13 +124,9 @@ fn for_children(
             legal += 1;
             let v = match child {
                 None => cur[layout.index(&ctx.pos.board, ctx.pos.side) as usize],
-                Some(s) => {
-                    let t = tables
-                        .map
-                        .get(&s)
-                        .unwrap_or_else(|| panic!("{} needs {}", sig.name(), s.name()));
-                    t.get(&ctx.pos.board, ctx.pos.side)
-                }
+                Some(s) => tables
+                    .value(&s, &ctx.pos.board, ctx.pos.side)
+                    .unwrap_or_else(|| panic!("{} needs {}", sig.name(), s.name())),
             };
             f(v, child.is_none());
         }

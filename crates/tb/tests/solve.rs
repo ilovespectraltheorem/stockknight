@@ -2,13 +2,13 @@
 
 use sk_core::Position;
 use sk_tb::solve::{check, solve};
-use sk_tb::{all_sigs, brute, decode_value, Tables, Wdl};
+use sk_tb::{all_sigs, brute, canonical_sigs, decode_value, Tables, Wdl};
 
 fn solved(max: u32) -> Tables {
     let mut t = Tables::default();
-    for s in all_sigs(max) {
+    for s in canonical_sigs(max) {
         let table = solve(s, &t, 2);
-        t.map.insert(s, table);
+        t.insert(table);
     }
     t
 }
@@ -20,8 +20,8 @@ fn three_pieces_agree_with_brute_force() {
     let (n, bad) = brute::compare(&sigs, &t, &|_| {});
     assert!(bad.is_empty(), "{bad:#?}");
     assert!(n > 700_000);
-    for s in &sigs {
-        check(&t.map[s], &t, 2).unwrap();
+    for s in canonical_sigs(3) {
+        check(&t.map[&s], &t, 2).unwrap();
     }
 }
 
@@ -45,11 +45,12 @@ fn table_files_round_trip() {
     for table in t.map.values() {
         table.save(&dir).unwrap();
     }
-    let back = Tables::load_dir(&dir, &all_sigs(3)).unwrap();
+    let mut back = Tables::in_dir(&dir);
+    back.ensure(&all_sigs(3)).unwrap();
     for (s, table) in &t.map {
         assert_eq!(back.map[s].data, table.data, "{}", s.name());
     }
-    for s in all_sigs(3) {
+    for s in canonical_sigs(3) {
         std::fs::remove_file(dir.join(sk_tb::Table::file_name(&s))).unwrap();
     }
     std::fs::remove_dir(&dir).unwrap();
