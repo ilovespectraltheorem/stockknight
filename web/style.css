@@ -99,7 +99,7 @@ code { font-size: 0.9em; background: var(--surface-2); padding: 1px 5px; border-
   padding: 10px max(16px, calc((100vw - 1180px) / 2));
   border-bottom: 1px solid var(--line);
   background: var(--surface);
-  position: sticky; top: 0; z-index: 10;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
 }
 .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); }
 .brand-mark { width: 34px; height: 34px; display: block; }
@@ -270,6 +270,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
 .share p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
 .share-row { display: flex; gap: 6px; }
 .share-row input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.open-games { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 180px; overflow-y: auto; }
+.open-games .btn { width: 100%; text-align: left; }
 .navrow { display: flex; gap: 6px; justify-content: center; }
 .navrow .btn { min-width: 48px; }
 

@@ -161,6 +161,69 @@ test('a real game reviews end to end', () => {
   for (const pl of out.players) assert.ok(pl.accuracy === null || (pl.accuracy >= 0 && pl.accuracy <= 100));
 });
 
+// A tiny in-memory stand-in for the claude.ai Artifact database (doc get/set/update/onSnapshot).
+function fakeDb() {
+  const docs = new Map(), subs = new Map(), colSubs = [];
+  const snap = (path) => ({ id: path.split('/').pop(), exists: docs.has(path), data: () => (docs.has(path) ? structuredClone(docs.get(path)) : undefined) });
+  const notify = path => {
+    for (const fn of subs.get(path) || []) setTimeout(() => fn(snap(path)));
+    for (const fn of colSubs) setTimeout(() => fn({ docs: [...docs.keys()].map(snap) }));
+  };
+  return {
+    doc: path => ({
+      get: async () => snap(path),
+      set: async d => (docs.set(path, structuredClone(d)), notify(path)),
+      update: async d => {
+        if (!docs.has(path)) throw new Error('missing');
+        docs.set(path, { ...docs.get(path), ...structuredClone(d) });
+        notify(path);
+      },
+      onSnapshot(fn) {
+        subs.set(path, [...(subs.get(path) || []), fn]);
+        setTimeout(() => fn(snap(path)));
+        return () => subs.set(path, subs.get(path).filter(f => f !== fn));
+      },
+    }),
+    collection: () => {
+      const q = { orderBy: () => q, limit: () => q, onSnapshot: fn => (colSubs.push(fn), setTimeout(() => fn({ docs: [...docs.keys()].map(snap) })), () => {}) };
+      return q;
+    },
+  };
+}
+
+test('artifact rooms: seats, turn order, legality, resignation, open list', async () => {
+  globalThis.StockKnight = SK;
+  require('./online.js');
+  const db = fakeDb();
+  const alice = globalThis.Online.dbBackend(db, 'alice');
+  const bob = globalThis.Online.dbBackend(db, 'bob');
+  const carol = globalThis.Online.dbBackend(db, 'carol');
+  const tick = () => new Promise(r => setTimeout(r, 5));
+  const id = await alice.create('w');
+  let open = null;
+  bob.listOpen(rows => (open = rows));
+  await tick();
+  assert.deepEqual(open.map(r => [r.id, r.open]), [[id, 'b']]);
+  await assert.rejects(alice.move(id, 'b2b3'), /opponent/);
+  const seen = {};
+  for (const [name, be] of [['alice', alice], ['bob', bob], ['carol', carol]]) be.subscribe(id, u => (seen[name] = u), err => assert.fail(err));
+  await tick(); await tick();
+  assert.equal(seen.alice.you, 'w');
+  assert.equal(seen.bob.you, 'b');
+  assert.equal(seen.carol.you, null, 'a third visitor watches');
+  await assert.rejects(bob.move(id, 'c5c4'), /turn/);
+  await assert.rejects(alice.move(id, 'b2b5'), /Illegal/);
+  await assert.rejects(carol.move(id, 'b2b3'), /watching/);
+  await alice.move(id, 'b2b3');
+  await bob.move(id, 'c5c4');
+  await tick();
+  assert.deepEqual(seen.carol.moves, ['b2b3', 'c5c4']);
+  await bob.resign(id);
+  await tick();
+  assert.deepEqual(seen.alice.result, { winner: 'w', reason: 'resignation' });
+  await assert.rejects(alice.move(id, 'c2c3'), /over/);
+});
+
 async function serverTest() {
   const server = createServer().listen(0);
   await new Promise(r => server.once('listening', r));

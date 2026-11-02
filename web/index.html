@@ -90,7 +90,7 @@
             <button class="btn primary" id="btnReviewThis">Review this game</button>
           </div>
           <div class="share" id="sharePanel" hidden>
-            <p>Send this link to your opponent:</p>
+            <p id="shareText">Send this link to your opponent:</p>
             <div class="share-row"><input id="shareLink" readonly><button class="btn" id="btnCopy">Copy</button></div>
           </div>
         </aside>
@@ -204,8 +204,13 @@
   <dialog id="dlgOnline" class="dialog">
     <form method="dialog">
       <h2>Play a friend online</h2>
-      <p>Make a room, then send the link. The first person to open it takes the other side.</p>
-      <h3>Play as</h3>
+      <div id="openGamesWrap" hidden>
+        <h3>Open games</h3>
+        <ul class="open-games" id="openGames"><li class="muted">Looking for games…</li></ul>
+      </div>
+      <h3>Join with a code</h3>
+      <div class="share-row"><input id="joinCode" placeholder="e.g. k7pm2x" autocomplete="off" maxlength="12"><button class="btn" value="code">Join</button></div>
+      <h3>Or make a new game, playing as</h3>
       <div class="seg">
         <label><input type="radio" name="ocolor" value="w" checked><span>White</span></label>
         <label><input type="radio" name="ocolor" value="random"><span>Random</span></label>
@@ -213,7 +218,7 @@
       </div>
       <div class="dialog-actions">
         <button class="btn" value="cancel">Cancel</button>
-        <button class="btn primary" value="ok">Make a room</button>
+        <button class="btn primary" value="ok">Make a game</button>
       </div>
     </form>
   </dialog>
@@ -237,6 +242,7 @@
   <script src="engine-tasks.js"></script>
   <script src="review.js"></script>
   <script src="pieces.js"></script>
+  <script src="online.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

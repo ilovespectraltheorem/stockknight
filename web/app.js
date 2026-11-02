@@ -93,7 +93,10 @@
     start() {
       this.worker = null;
       try {
-        this.worker = new Worker('engine-worker.js');
+        // A bundled single-file page (build-artifact.js) carries the worker's source inline.
+        this.worker = window.SK_WORKER_SRC
+          ? new Worker(URL.createObjectURL(new Blob([window.SK_WORKER_SRC], { type: 'text/javascript' })))
+          : new Worker('engine-worker.js');
         this.worker.onmessage = e => {
           const p = this.pending.get(e.data.id);
           if (!p) return;
@@ -140,6 +143,7 @@
     }
   }
 
+  let backend = null; // online rooms: see online.js
   const engine = new EngineClient(); // play
   const reviewEngine = new EngineClient(); // game review, so it never waits behind a game
 
@@ -561,18 +565,36 @@
       const g = this.game;
       if (!g || g.result) return;
       if (g.mode === 'online') {
-        if (!this.online || !this.online.token) return;
-        if (!confirm('Resign this game?')) return;
-        fetch(`/api/rooms/${this.online.id}/resign`, { method: 'POST', body: JSON.stringify({ token: this.online.token }) });
+        if (!this.online || this.online.color === null) return;
+        if (!this.confirmResign()) return;
+        backend.resign(this.online.id).catch(err => toast(err.message));
         return;
       }
       const loser = g.mode === 'pve' ? g.humanColor : this.pos.side;
-      if (!confirm(`Resign as ${colorName(loser)}?`)) return;
+      if (!this.confirmResign()) return;
       engine.reset();
       this.token++;
       this.thinking = false;
       this.finish({ winner: loser === WHITE ? 'b' : 'w', reason: 'resignation' });
       this.render();
+    },
+
+    // Resigning takes a second click within a few seconds (no browser confirm dialog, which
+    // embedded pages may not be allowed to show).
+    confirmResign() {
+      const b = $('#btnResign');
+      if (this.resignArmed) {
+        clearTimeout(this.resignArmed);
+        this.resignArmed = 0;
+        b.textContent = 'Resign';
+        return true;
+      }
+      b.textContent = 'Click again to resign';
+      this.resignArmed = setTimeout(() => {
+        this.resignArmed = 0;
+        b.textContent = 'Resign';
+      }, 3000);
+      return false;
     },
 
     finish(result) {
@@ -603,7 +625,7 @@
       $('#playEval').hidden = !this.showEval;
       $('#btnEval').classList.toggle('primary', this.showEval);
       $('#btnUndo').disabled = g.mode === 'online' || !g.moves.length;
-      $('#btnResign').disabled = !!g.result || (g.mode === 'online' && !(this.online && this.online.token));
+      $('#btnResign').disabled = !!g.result || (g.mode === 'online' && !(this.online && this.online.color !== null));
     },
 
     lastMoveCode() {
@@ -673,7 +695,7 @@
         sub = 'Review the game to see where it was won and lost.';
       } else if (g.mode === 'online' && this.online && (!this.online.players.w || !this.online.players.b)) {
         main = 'Waiting for your opponent';
-        sub = 'Send them the link below.';
+        sub = 'Share the details below with your friend.';
       } else {
         const side = colorName(this.pos.side);
         main = this.thinking ? `${side === 'White' ? g.white : g.black} is thinking` : `${side} to move`;
@@ -688,51 +710,53 @@
 
     async createRoom(color) {
       try {
-        const r = await fetch('/api/rooms', { method: 'POST', body: JSON.stringify({ color }) });
-        if (!r.ok) throw new Error((await r.json()).error);
-        const { id, token } = await r.json();
-        store.set(`sk.room.${id}`, token);
+        const id = await backend.create(color);
         location.hash = `#/online/${id}`;
       } catch (err) {
-        toast(`Could not make a room: ${err.message}`);
+        toast(`Could not make a game: ${err.message}`);
       }
     },
 
-    async joinRoom(id) {
+    joinRoom(id) {
       if (this.online && this.online.id === id) return;
       this.leaveOnline();
+      if (!backend) {
+        toast('Online play is not available here');
+        location.hash = '#/';
+        return;
+      }
       engine.reset();
       this.token++;
       this.thinking = false;
-      let token = store.get(`sk.room.${id}`, null);
-      if (!token) {
-        const r = await fetch(`/api/rooms/${id}/join`, { method: 'POST', body: '{}' });
-        if (r.status === 404) {
-          toast('That room does not exist (rooms close after a few idle hours)');
-          location.hash = '#/';
-          return;
-        }
-        if (r.ok) {
-          token = (await r.json()).token;
-          store.set(`sk.room.${id}`, token);
-        }
-      }
-      this.online = { id, token, color: null, players: { w: false, b: false }, es: null };
+      this.online = { id, color: null, players: { w: false, b: false }, unsubscribe: null };
       this.game = { id: `room-${id}`, mode: 'online', startFen: START_FEN, moves: [], white: 'White', black: 'Black', result: null, date: Date.now() };
       this.pos = new Position(START_FEN);
-      $('#shareLink').value = `${location.origin}${location.pathname}#/online/${id}`;
-      const es = new EventSource(`/api/rooms/${id}/events?token=${encodeURIComponent(token || '')}`);
-      this.online.es = es;
-      es.addEventListener('hello', e => {
-        const { you } = JSON.parse(e.data);
-        this.online.color = you === 'w' ? WHITE : you === 'b' ? BLACK : null;
-        this.flipped = this.online.color === BLACK;
-        this.game.white = this.online.color === WHITE ? 'You' : 'Opponent';
-        this.game.black = this.online.color === BLACK ? 'You' : 'Opponent';
-        if (this.online.color === null) this.game.white = this.game.black = 'Player';
-        this.render();
-      });
-      es.addEventListener('state', e => this.syncRoom(JSON.parse(e.data)));
+      if (backend.kind === 'server') {
+        $('#shareText').textContent = 'Send this link to your opponent:';
+        $('#shareLink').value = `${location.origin}${location.pathname}#/online/${id}`;
+      } else {
+        $('#shareText').textContent = 'Your friend opens this page, chooses Play a friend online and joins this game from the list, or types its code:';
+        $('#shareLink').value = id;
+      }
+      const o = this.online;
+      o.unsubscribe = backend.subscribe(
+        id,
+        st => {
+          if (this.online !== o) return;
+          const you = st.you === 'w' ? WHITE : st.you === 'b' ? BLACK : null;
+          if (you !== o.color || this.game.white === 'White') {
+            o.color = you;
+            this.flipped = you === BLACK;
+            this.game.white = you === WHITE ? 'You' : you === null ? 'Player' : 'Opponent';
+            this.game.black = you === BLACK ? 'You' : you === null ? 'Player' : 'Opponent';
+          }
+          this.syncRoom(st);
+        },
+        err => {
+          toast(err.message);
+          if (this.online === o) location.hash = '#/';
+        },
+      );
       this.render();
     },
 
@@ -758,13 +782,14 @@
 
     async onlineMove(uci) {
       const o = this.online;
-      // Show the move at once; the server's state event confirms or corrects it.
+      // Show the move at once; the next room update confirms or corrects it.
       const before = this.game.moves.slice();
       this.applyMove(uci);
-      const r = await fetch(`/api/rooms/${o.id}/move`, { method: 'POST', body: JSON.stringify({ token: o.token, uci }) });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        toast(err.error || 'Move refused');
+      try {
+        await backend.move(o.id, uci);
+      } catch (err) {
+        if (this.online !== o) return;
+        toast(err.message || 'Move refused');
         this.game.moves = before;
         this.game.result = null;
         this.pos = buildPosition(this.game.startFen, before);
@@ -773,7 +798,7 @@
     },
 
     leaveOnline() {
-      if (this.online && this.online.es) this.online.es.close();
+      if (this.online && this.online.unsubscribe) this.online.unsubscribe();
       this.online = null;
     },
   };
@@ -1145,14 +1170,41 @@
     play.start({ mode: 'pve', level, color });
   });
 
+  let openGamesUnsub = null;
   function openOnlineDialog() {
     const dlg = $('#dlgOnline');
     dlg.returnValue = '';
+    $('#joinCode').value = '';
+    $('#openGamesWrap').hidden = !(backend && backend.listOpen);
+    if (backend && backend.listOpen && !openGamesUnsub) {
+      openGamesUnsub = backend.listOpen(rows => {
+        $('#openGames').innerHTML = rows.length
+          ? rows.map(r => `<li><button type="button" class="btn" data-join="${esc(r.id)}">${r.mine ? 'Back to your game' : `Play as ${r.open === 'w' ? 'White' : 'Black'}`}
+              <span class="muted">· ${esc(r.id)} · ${r.moves} move${r.moves === 1 ? '' : 's'}</span></button></li>`).join('')
+          : '<li class="muted">No open games yet. Make one and your friend will see it here.</li>';
+      });
+    }
     dlg.showModal();
   }
 
+  $('#dlgOnline').addEventListener('click', e => {
+    const b = e.target.closest('[data-join]');
+    if (b) {
+      $('#dlgOnline').close('join');
+      location.hash = `#/online/${b.dataset.join}`;
+    }
+  });
+
   $('#dlgOnline').addEventListener('close', () => {
     const dlg = $('#dlgOnline');
+    if (openGamesUnsub) openGamesUnsub();
+    openGamesUnsub = null;
+    if (dlg.returnValue === 'code') {
+      const code = $('#joinCode').value.trim().toLowerCase();
+      if (/^[a-z0-9]{4,12}$/.test(code)) location.hash = `#/online/${code}`;
+      else if (code) toast('That code does not look right');
+      return;
+    }
     if (dlg.returnValue !== 'ok') return;
     play.createRoom(dlg.querySelector('input[name=ocolor]:checked').value);
   });
@@ -1250,18 +1302,23 @@
       if (b) openSaved(b.dataset.game);
     });
 
-    // Online play needs the StockKnight server (web/server.js).
-    fetch('/api/health')
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(() => {})
-      .catch(() => {
-        $('#onlineCard').disabled = true;
-        $('#onlineSub').textContent = 'Needs the StockKnight server: run node web/server.js and open the page it prints.';
-      });
-
+    // Online play needs web/server.js, or the shared database of a claude.ai Artifact.
     window.addEventListener('hashchange', route);
     renderRecent();
-    route();
+    const pendingOnline = /^#\/online\//.test(location.hash);
+    if (!pendingOnline) route();
+    window.Online.detect(store).then(b => {
+      backend = b;
+      if (!b) {
+        $('#onlineCard').disabled = true;
+        $('#onlineSub').textContent = window.claude
+          ? 'Sign in to claude.ai, and ask the owner for access that lets you interact with this page.'
+          : 'Needs the StockKnight server: run node web/server.js and open the page it prints.';
+      } else if (b.kind === 'db') {
+        $('#onlineSub').textContent = 'Make a game, and your friend joins it from this same page.';
+      }
+      if (pendingOnline) route();
+    });
   }
 
   boot();
