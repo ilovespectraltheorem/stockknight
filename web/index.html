@@ -153,7 +153,7 @@
     <section class="view" id="view-rules" hidden>
       <article class="rules">
         <h2>KnightChess in two minutes</h2>
-        <p>The rules every StockKnight component plays by (ruleset <code>knightchess-1</code>).</p>
+        <p>The rules every StockKnight component plays by (ruleset <code>knightchess-2</code>).</p>
         <h3>Board and pieces</h3>
         <ul>
           <li>6×6 board. White sets up on rank 1 as bishop, knight, queen, king, knight, rook, with pawns on rank 2. Black's setup is the same rotated half a turn.</li>
@@ -163,9 +163,9 @@
         </ul>
         <h3>Pawns</h3>
         <ul>
-          <li>In your own half (ranks 1–3 for White) a pawn moves or captures one square straight ahead.</li>
-          <li>In the opponent's half it moves or captures straight ahead, left or right.</li>
-          <li>A pawn may never enter the far rank. No double step, en passant or promotion.</li>
+          <li>A pawn can always move or capture one square straight ahead, all the way to the far rank. It never captures diagonally.</li>
+          <li>In the opponent's half (ranks 4–6 for White) it can also move or capture one square left or right.</li>
+          <li>A pawn never moves backwards. No double step, en passant or promotion: a pawn on the far rank can only step sideways.</li>
         </ul>
         <h3>Drops</h3>
         <ul>

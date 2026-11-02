@@ -336,12 +336,13 @@
   // --- saved games ------------------------------------------------------------------------
 
   function savedGames() {
-    return store.get('sk.games', []);
+    // Games saved under an earlier ruleset may not replay under the current rules.
+    return store.get('sk.games', []).filter(g => g.ruleset === SK.RULESET);
   }
 
   function saveGame(game) {
     const games = savedGames().filter(g => g.id !== game.id);
-    games.unshift(game);
+    games.unshift({ ...game, ruleset: SK.RULESET });
     store.set('sk.games', games.slice(0, 40));
     renderRecent();
   }
