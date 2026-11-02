@@ -3,7 +3,7 @@
 A Stockfish-style engine for **KnightChess** (a 6×6 drop-chess variant) and an online platform
 to play and evaluate games.
 
-- Rules: [docs/RULES.md](docs/RULES.md) (ruleset `knightchess-1`)
+- Rules: [docs/RULES.md](docs/RULES.md) (ruleset `knightchess-2`)
 - Plan: the StockKnight engine, training and platform plan (shared separately)
 
 ## Status

@@ -3,7 +3,7 @@
 // evaluation G0 and the alpha-beta search. The Rust engine is a port of this file and must
 // reproduce it exactly: same move generation order, same hash keys, same search tree.
 
-const RULESET = 'knightchess-1';
+const RULESET = 'knightchess-2';
 
 // ---------------------------------------------------------------------------------------------
 // Conventions (docs/RULES.md, "Notation")
@@ -88,8 +88,8 @@ const PAWN_STEPS = [WHITE, BLACK].map(color => {
     const list = [];
     const f = fileOf(sq), r = rankOf(sq);
     const fr = r + (color === WHITE ? 1 : -1);
-    if (fr >= 0 && fr < 6 && fr !== farRank(color)) list.push(fr * 6 + f);
-    if (inEnemyHalf(color, r) && r !== farRank(color)) {
+    if (fr >= 0 && fr < 6) list.push(fr * 6 + f);
+    if (inEnemyHalf(color, r)) {
       if (f > 0) list.push(r * 6 + f - 1);
       if (f < 5) list.push(r * 6 + f + 1);
     }
@@ -180,9 +180,6 @@ class Position {
           if (type === KING) {
             if (this.kingSq[color] >= 0) throw new Error(`bad FEN: two kings: ${fen}`);
             this.kingSq[color] = sq;
-          }
-          if (type === PAWN && rank === farRank(color)) {
-            throw new Error(`bad FEN: pawn on its far rank: ${fen}`);
           }
           this.board[sq] = code;
           file++;

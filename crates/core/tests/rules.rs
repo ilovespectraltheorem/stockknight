@@ -36,14 +36,14 @@ fn play(p: &mut Position, moves: &[&str]) {
     }
 }
 
-const PERFT: [u64; 5] = [10, 100, 1185, 13770, 181548];
+const PERFT: [u64; 5] = [10, 100, 1185, 13770, 181536];
 
 #[test]
 fn start_position() {
     let mut p = Position::startpos();
     assert_eq!(p.to_fen(), START_FEN);
     assert_eq!(p.legal_moves().len(), 10);
-    assert_eq!(RULESET, "knightchess-1");
+    assert_eq!(RULESET, "knightchess-2");
 }
 
 #[test]
@@ -84,13 +84,18 @@ fn pawn_captures_straight_and_sideways_never_diagonally() {
 }
 
 #[test]
-fn pawn_never_enters_far_rank() {
-    let mut p = pos("2k3/2P3/6/6/6/3K2[-] w 0 1");
-    assert_eq!(piece_moves(&mut p, "c5"), ["c5b5", "c5d5"]);
-    assert!(!p.in_check(BLACK));
+fn pawn_enters_far_rank_and_checks_there() {
+    let mut p = pos("1k4/2P3/6/6/6/3K2[-] w 0 1");
+    assert_eq!(piece_moves(&mut p, "c5"), ["c5b5", "c5c6", "c5d5"]);
+    assert!(pos("2k3/2P3/6/6/6/3K2[-] b 0 1").in_check(BLACK));
     assert_eq!(
         piece_moves(&mut pos("3k2/6/6/6/3p2/2K3[-] b 0 1"), "d2"),
-        ["d2c2", "d2e2"]
+        ["d2c2", "d2d1", "d2e2"]
+    );
+    // On the far rank only sideways steps remain.
+    assert_eq!(
+        piece_moves(&mut pos("2P3/6/6/k5/6/3K2[-] w 0 1"), "c6"),
+        ["c6b6", "c6d6"]
     );
 }
 
@@ -202,8 +207,6 @@ fn draws_and_no_fifty_move_rule() {
 fn bad_fens_are_rejected() {
     for fen in [
         "2P3/6/6/6/6/3K2[-] w 0 1",
-        "2kP2/6/6/6/6/3K2[-] w 0 1",
-        "2k3/6/6/6/6/2pK2[-] w 0 1",
         "2k3/6/6/6/6/3K2[PPP] w 0 1",
         "2k3/6/6/6/6/3K2[-] x 0 1",
         "2k3/6/6/6/3K2[-] w 0 1",

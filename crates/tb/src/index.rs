@@ -7,7 +7,7 @@
 //! side not to move in check) are marked invalid in the table.
 
 use sk_core::{
-    color_of, far_rank, file_of, make_code, rank_of, type_of, Position, BISHOP, KING, PAWN, ROOK,
+    color_of, file_of, make_code, rank_of, type_of, Position, BISHOP, KING, PAWN, ROOK,
 };
 
 use crate::sig::{Sig, TYPES};
@@ -142,8 +142,7 @@ impl Layout {
         idx
     }
 
-    /// The board and side to move for `idx`, or None when two pieces share a square or a pawn
-    /// stands on its far rank. Legality of check is not tested here.
+    /// The board and side to move for `idx`, or None when two pieces share a square. Legality of check is not tested here.
     pub fn decode(&self, mut idx: u64) -> Option<([u8; 36], u8)> {
         let mut board = [0u8; 36];
         let mut sets = [[0u8; MAX_GROUP]; 10];
@@ -165,9 +164,6 @@ impl Layout {
         for (g, &(code, k)) in self.groups.iter().enumerate() {
             for &sq in &sets[g][..k] {
                 if board[sq as usize] != 0 {
-                    return None;
-                }
-                if type_of(code) == PAWN && rank_of(sq) == far_rank(color_of(code)) {
                     return None;
                 }
                 board[sq as usize] = code;

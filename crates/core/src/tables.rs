@@ -3,7 +3,7 @@
 
 use std::sync::OnceLock;
 
-use crate::{far_rank, file_of, in_enemy_half, rank_of, BISHOP, BLACK, PAWN, ROOK, WHITE};
+use crate::{file_of, in_enemy_half, rank_of, BISHOP, BLACK, PAWN, ROOK, WHITE};
 
 pub struct Tables {
     pub knight: Vec<Vec<u8>>,
@@ -72,10 +72,10 @@ fn pawn_steps(color: u8) -> Vec<Vec<u8>> {
             let mut list = Vec::new();
             let (f, r) = (file_of(sq) as i32, rank_of(sq) as i32);
             let fr = r + if color == WHITE { 1 } else { -1 };
-            if (0..6).contains(&fr) && fr != far_rank(color) as i32 {
+            if (0..6).contains(&fr) {
                 list.push((fr * 6 + f) as u8);
             }
-            if in_enemy_half(color, r as u8) && r != far_rank(color) as i32 {
+            if in_enemy_half(color, r as u8) {
                 if f > 0 {
                     list.push((r * 6 + f - 1) as u8);
                 }

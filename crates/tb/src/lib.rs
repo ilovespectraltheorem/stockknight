@@ -1,4 +1,4 @@
-//! Endgame tablebases for KnightChess (ruleset `knightchess-1`).
+//! Endgame tablebases for KnightChess (ruleset `knightchess-2`).
 //!
 //! A table holds every position of one material signature (pieces on the board and in reserve
 //! for both sides) with its exact result and distance to the end of the game. Captures remove
