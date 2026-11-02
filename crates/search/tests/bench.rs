@@ -41,7 +41,7 @@ fn node_limit_stops_exactly() {
         |_| {},
     );
     assert!(r.best != 0);
-    assert!(r.nodes <= 5000);
+    assert!(r.nodes <= 5000, "{}", r.nodes);
 }
 
 #[test]

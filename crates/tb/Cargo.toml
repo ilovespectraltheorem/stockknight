@@ -1,0 +1,8 @@
+[package]
+name = "sk-tb"
+version.workspace = true
+edition.workspace = true
+description = "Endgame tablebases: exact win/draw/loss and distance to mate by retrograde analysis"
+
+[dependencies]
+sk-core = { path = "../core" }

@@ -1,4 +1,4 @@
-# KnightChess rules (ruleset `knightchess-1`)
+# KnightChess rules (ruleset `knightchess-2`)
 
 These are the frozen rules that every StockKnight component implements: the JavaScript
 reference engine (`reference/engine.js`), the Rust core, the WebAssembly build and the game
@@ -45,10 +45,12 @@ A pawn's options depend on which half of the board it stands on.
 
 **Everywhere:**
 
-- A pawn may never enter the opponent's back rank (rank 6 for White, rank 1 for Black), by
-  moving, capturing or being dropped. So a White pawn on rank 5 can only move or capture
-  sideways.
+- A pawn can always move or capture one square straight forward, including onto the
+  opponent's back rank (rank 6 for White, rank 1 for Black). So a White pawn on rank 5 gives
+  check to a king on the square in front of it. A pawn on the opponent's back rank can only
+  move or capture sideways.
 - No double step, no en passant, no promotion.
+- Pawns may still not be *dropped* on the opponent's back rank (see Drops).
 
 ## Kings and check
 

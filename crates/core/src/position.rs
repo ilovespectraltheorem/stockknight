@@ -142,9 +142,6 @@ impl Position {
                     }
                     pos.king_sq[color as usize] = sq;
                 }
-                if kind == PAWN && rank == far_rank(color) {
-                    return bad("pawn on its far rank");
-                }
                 pos.board[sq as usize] = code;
                 file += 1;
             }

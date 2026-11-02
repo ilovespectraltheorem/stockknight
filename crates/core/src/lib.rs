@@ -5,7 +5,7 @@ pub mod tables;
 
 pub use position::{DrawReason, Outcome, Position, WinReason};
 
-pub const RULESET: &str = "knightchess-1";
+pub const RULESET: &str = "knightchess-2";
 pub const START_FEN: &str = "rnkqnb/pppppp/6/6/PPPPPP/BNQKNR[PPRBpprb] w 0 1";
 
 pub const WHITE: u8 = 0;
@@ -55,7 +55,7 @@ pub const fn make_code(piece_type: u8, color: u8) -> u8 {
     piece_type | color << 3
 }
 
-/// The rank a pawn of `color` may never enter.
+/// The opponent's back rank for `color`: pawns may not be dropped there.
 pub const fn far_rank(color: u8) -> u8 {
     if color == WHITE {
         5

@@ -129,3 +129,20 @@ The large run (`runs/large`, `configs/large.toml`) continues from the Phase 5 le
 imported). Rounds start at 5M positions and grow 25% (up to 15M), with a 4-round window and a
 [0, 6] gate of up to 4,000 games. It runs until 3 rejections in a row. `./sk doctor --bench`
 estimates 1.6–4.9 hours of data generation per generation on this 4-core machine.
+
+## Endgame tablebases up to 4 pieces (E0–E1), 31 Oct 2026
+
+`sk-tb gen --max 4` solves all 147 tables (57.5M legal positions) in 129 s on one core at low
+priority. The files take 164 MB. `sk-tb check` confirms every value against its successors. The
+independent brute-force solver agrees on every position of all 17 tables up to 3 pieces and all 130
+four-piece tables, 114M positions in all (it does not use the mirror symmetry, so it counts more).
+
+What the 4-piece tables show about KnightChess endings:
+
+- Kings never attack, so a lone king can walk right up to the other king. KRvK is decisive in only 19% of
+  positions, KQvK in 0.6%, and KPvK and KBvK are complete draws.
+- Two pieces usually win. KRBvK, KQRvK and KRRvK are decisive in 85–88% of positions, with the
+  longest win at 32 plies.
+- Pieces in reserve are much stronger than the same pieces on the board. K[RB]vK and K[RP]vK are wins
+  from every position. KR[P]vK is decisive in 90% of positions, against 19% for KRvK.
+- The longest win up to 4 pieces is 102 plies (KRPvK).
