@@ -53,8 +53,9 @@ A pawn's options depend on which half of the board it stands on.
 
 ## Kings and check
 
-- Kings never capture each other and never attack each other, so a king never gives check.
-  Kings may stand on adjacent squares.
+- A king attacks the squares around it, as in chess. So two kings can never stand next to
+  each other, and a king cannot capture a piece the other king defends. A king never captures
+  the other king.
 - A king is in check when an enemy piece other than the king attacks its square.
 - You may not make a move that leaves your own king in check.
 
