@@ -50,7 +50,6 @@ A pawn's options depend on which half of the board it stands on.
   check to a king on the square in front of it. A pawn on the opponent's back rank can only
   move or capture sideways.
 - No double step, no en passant, no promotion.
-- Pawns may still not be *dropped* on the opponent's back rank (see Drops).
 
 ## Kings and check
 
@@ -65,7 +64,8 @@ Instead of moving a piece, a player may place a piece from their reserve on any 
 
 - Captured pieces are removed from the game. They never go to anyone's reserve.
 - A pawn may not be dropped on a file that already holds one of your own pawns.
-- A pawn may not be dropped on the opponent's back rank.
+- A pawn may be dropped on any rank, including the opponent's back rank, where it can only
+  move sideways.
 - A rook or bishop may be dropped only while you have fewer than 2 rooks and bishops in total
   on the board.
 - A drop may give check or checkmate.
