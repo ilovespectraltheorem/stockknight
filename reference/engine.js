@@ -279,7 +279,8 @@ class Position {
 
   // --- attacks --------------------------------------------------------------------------------
 
-  // Whether `sq` is attacked by a piece of color `by`. Kings never attack.
+  // Whether `sq` is attacked by a piece of color `by`. Kings attack their neighbours, so two
+  // kings can never stand next to each other.
   isAttacked(sq, by) {
     const b = this.board;
     const pawn = makeCode(PAWN, by);
@@ -287,7 +288,8 @@ class Position {
     const knight = makeCode(KNIGHT, by);
     for (const from of KNIGHT_JUMPS[sq]) if (b[from] === knight) return true;
     const queen = makeCode(QUEEN, by);
-    for (const from of KING_STEPS[sq]) if (b[from] === queen) return true;
+    const king = makeCode(KING, by);
+    for (const from of KING_STEPS[sq]) if (b[from] === queen || b[from] === king) return true;
     const bishop = makeCode(BISHOP, by);
     for (const ray of DIAG_RAYS[sq]) {
       for (const s of ray) {

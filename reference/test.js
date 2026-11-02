@@ -102,11 +102,14 @@ test('sideways steps keep the quiet-ply counter, forward steps reset it', () => 
   assert.equal(pos.clock, 0);
 });
 
-test('kings may stand side by side and are never captured', () => {
-  const pos = new E.Position('6/6/2kK2/6/6/6[-] w 0 1');
-  assert.ok(!pos.inCheck(E.WHITE) && !pos.inCheck(E.BLACK));
-  assert.ok(!uciMoves(pos).includes('d4c4'));
-  assert.ok(uciMoves(pos).includes('d4c5'), 'moving next to the enemy king is legal');
+test('kings never stand next to each other', () => {
+  assert.throws(() => new E.Position('6/6/2kK2/6/6/6[-] w 0 1'));
+  const pos = new E.Position('6/6/1k1K2/6/6/6[-] w 0 1');
+  const moves = uciMoves(pos);
+  for (const u of ['d4c3', 'd4c4', 'd4c5']) assert.ok(!moves.includes(u), u);
+  assert.ok(moves.includes('d4e4'));
+  const guarded = new E.Position('6/6/1k1K2/2r3/6/6[-] w 0 1');
+  assert.ok(!uciMoves(guarded).includes('d4c3'), 'a king may not take a piece the other king defends');
 });
 
 test('rook and bishop drop cap', () => {

@@ -279,7 +279,8 @@ impl Position {
 
     // --- attacks ------------------------------------------------------------------------------
 
-    /// Whether `sq` is attacked by a piece of color `by`. Kings never attack.
+    /// Whether `sq` is attacked by a piece of color `by`. Kings attack their neighbours, so two
+    /// kings can never stand next to each other.
     pub fn is_attacked(&self, sq: u8, by: u8) -> bool {
         let t = tables();
         let b = &self.board;
@@ -296,7 +297,11 @@ impl Position {
             return true;
         }
         let queen = make_code(QUEEN, by);
-        if t.king[sq].iter().any(|&s| b[s as usize] == queen) {
+        let king = make_code(KING, by);
+        if t.king[sq]
+            .iter()
+            .any(|&s| b[s as usize] == queen || b[s as usize] == king)
+        {
             return true;
         }
         let bishop = make_code(BISHOP, by);
