@@ -55,15 +55,6 @@ pub const fn make_code(piece_type: u8, color: u8) -> u8 {
     piece_type | color << 3
 }
 
-/// The opponent's back rank for `color`: pawns may not be dropped there.
-pub const fn far_rank(color: u8) -> u8 {
-    if color == WHITE {
-        5
-    } else {
-        0
-    }
-}
-
 /// Whether `rank` lies in the half of the board where pawns of `color` may step sideways.
 pub const fn in_enemy_half(color: u8, rank: u8) -> bool {
     if color == WHITE {

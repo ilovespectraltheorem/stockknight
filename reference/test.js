@@ -18,7 +18,7 @@ const play = (pos, ...ucis) => {
 };
 
 // Perft from the start position, depths 1-5: the reference numbers for every other engine.
-const PERFT = [10, 100, 1185, 13770, 181536];
+const PERFT = [10, 100, 1185, 13788, 181968];
 
 test('start position', () => {
   const pos = new E.Position();
@@ -74,13 +74,13 @@ test('pawn attacks follow the half it stands in', () => {
   assert.ok(!new E.Position('6/6/6/2k3/3P2/K5[-] b 0 1').inCheck(), 'no diagonal attack');
 });
 
-test('no pawn drop on the far rank', () => {
+test('pawns may be dropped on the far rank', () => {
   const pos = new E.Position('2k3/6/6/6/6/3K2[P] w 0 1');
   const drops = uciMoves(pos).filter(u => u.startsWith('P@'));
-  assert.equal(drops.length, 29);
-  assert.ok(drops.every(u => !u.endsWith('6')));
+  assert.equal(drops.length, 34);
+  assert.ok(drops.includes('P@a6'));
   const black = new E.Position('2k3/6/6/6/6/3K2[p] b 0 1');
-  assert.ok(uciMoves(black).filter(u => u.startsWith('P@')).every(u => !u.endsWith('1')));
+  assert.ok(uciMoves(black).filter(u => u.startsWith('P@')).includes('P@a1'));
 });
 
 test('pawn drop file rule follows sideways moves', () => {

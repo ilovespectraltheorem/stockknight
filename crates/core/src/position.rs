@@ -398,10 +398,7 @@ impl Position {
         let hand = &self.hand[us as usize];
         if hand[PAWN as usize] > 0 {
             for to in 0..36u8 {
-                if b[to as usize] != 0
-                    || rank_of(to) == far_rank(us)
-                    || self.pawn_file[us as usize][file_of(to) as usize] != 0
-                {
+                if b[to as usize] != 0 || self.pawn_file[us as usize][file_of(to) as usize] != 0 {
                     continue;
                 }
                 list.push(encode_move(0, to, PAWN));

@@ -35,7 +35,6 @@ const moveFrom = m => (m >> 6) & 63;
 const moveDrop = m => m >> 12;
 
 // The rank a pawn of `color` may never enter, and whether a rank is in that pawn's enemy half.
-const farRank = color => (color === WHITE ? 5 : 0);
 const inEnemyHalf = (color, rank) => (color === WHITE ? rank >= 3 : rank <= 2);
 
 // ---------------------------------------------------------------------------------------------
@@ -352,7 +351,7 @@ class Position {
     const hand = this.hand[us];
     if (hand[PAWN] > 0) {
       for (let to = 0; to < 36; to++) {
-        if (b[to] || rankOf(to) === farRank(us) || this.pawnFile[us][fileOf(to)]) continue;
+        if (b[to] || this.pawnFile[us][fileOf(to)]) continue;
         list.push(encodeMove(0, to, PAWN));
       }
     }

@@ -36,7 +36,7 @@ fn play(p: &mut Position, moves: &[&str]) {
     }
 }
 
-const PERFT: [u64; 5] = [10, 100, 1185, 13770, 181536];
+const PERFT: [u64; 5] = [10, 100, 1185, 13788, 181968];
 
 #[test]
 fn start_position() {
@@ -120,13 +120,13 @@ fn pawn_attacks_follow_the_half() {
 }
 
 #[test]
-fn no_pawn_drop_on_far_rank() {
+fn pawns_may_be_dropped_on_far_rank() {
     let d = drops(&mut pos("2k3/6/6/6/6/3K2[P] w 0 1"), 'P');
-    assert_eq!(d.len(), 29);
-    assert!(d.iter().all(|u| !u.ends_with('6')));
+    assert_eq!(d.len(), 34);
+    assert!(d.iter().any(|u| u == "P@a6"));
     assert!(drops(&mut pos("2k3/6/6/6/6/3K2[p] b 0 1"), 'P')
         .iter()
-        .all(|u| !u.ends_with('1')));
+        .any(|u| u == "P@a1"));
 }
 
 #[test]
