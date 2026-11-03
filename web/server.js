@@ -1,5 +1,5 @@
 'use strict';
-// The StockKnight web server: serves the site and runs online games between two browsers.
+// The Maki web server: serves the site and runs online games between two browsers.
 // No dependencies. Moves are checked with the reference engine, so a client cannot cheat.
 //
 //   node web/server.js [--port 8080]        then open http://localhost:8080/
@@ -246,7 +246,7 @@ function createServer() {
 if (require.main === module) {
   const i = process.argv.indexOf('--port');
   const port = i >= 0 ? parseInt(process.argv[i + 1], 10) : parseInt(process.env.PORT || '8080', 10);
-  createServer().listen(port, () => console.log(`StockKnight: http://localhost:${port}/`));
+  createServer().listen(port, () => console.log(`Maki: http://localhost:${port}/`));
 }
 
 module.exports = { createServer, rooms };

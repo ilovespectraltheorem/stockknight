@@ -1,5 +1,5 @@
 'use strict';
-// The StockKnight site: the board, play against the engine, pass-and-play, online games and
+// The Maki site (the game was called KnightChess; its engine, Stockhorse, was StockKnight): the board, play against the engine, pass-and-play, online games and
 // game review. Rules come from the reference engine (reference/engine.js), so the site plays
 // exactly the game the engines play.
 
@@ -450,7 +450,7 @@
       if (opts.mode === 'pve') {
         humanColor = opts.color === 'random' ? (Math.random() < 0.5 ? WHITE : BLACK) : opts.color === 'b' ? BLACK : WHITE;
         const opp = OPPONENTS.find(o => o.id === opts.level) || OPPONENTS[1];
-        const engineName = `${opp.name} (engine)`;
+        const engineName = `${opp.name} (Stockhorse)`;
         white = humanColor === WHITE ? 'You' : engineName;
         black = humanColor === BLACK ? 'You' : engineName;
       }
@@ -665,7 +665,7 @@
         return `<button class="${cls}" data-type="${t}" title="${title}"${usable ? '' : ' tabindex="-1"'}>
           ${pieceSvg(LETTERS[t], colorKey(color))}${n > 1 ? `<span class="count">${n}</span>` : ''}</button>`;
       }).join('');
-      const avatarPiece = name.includes('engine') ? OPPONENTS.find(o => name.startsWith(o.name))?.piece || 'N' : 'N';
+      const avatarPiece = name.includes('Stockhorse') ? OPPONENTS.find(o => name.startsWith(o.name))?.piece || 'N' : 'N';
       return `<div class="avatar">${pieceSvg(avatarPiece, colorKey(color))}</div>
         <div><div class="pname">${esc(name)}${thinking}</div><div class="psub">${sub}</div></div>
         <div class="reserve">${res}</div>`;
@@ -1066,7 +1066,7 @@
       const g = this.game;
       const k = this.cursor;
       if (!this.data) {
-        el.innerHTML = '<div>The engine is going through the game. You can step through the moves while it works.</div>';
+        el.innerHTML = '<div>Stockhorse is going through the game. You can step through the moves while it works.</div>';
         return;
       }
       if (!ply) {
@@ -1314,7 +1314,7 @@
         $('#onlineCard').disabled = true;
         $('#onlineSub').textContent = window.claude
           ? 'Sign in to claude.ai, and ask the owner for access that lets you interact with this page.'
-          : 'Needs the StockKnight server: run node web/server.js and open the page it prints.';
+          : 'Needs the Maki server: run node web/server.js and open the page it prints.';
       } else if (b.kind === 'db') {
         $('#onlineSub').textContent = 'Make a game, and your friend joins it from this same page.';
       }

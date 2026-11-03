@@ -27,7 +27,7 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
 // followed by the body's content.
 const head = /<head>([\s\S]*)<\/head>/.exec(html)[1]
   .replace(/<meta charset[^>]*>|<meta name="viewport"[^>]*>|<meta name="description"[^>]*>/g, '')
-  .replace('<title>StockKnight</title>', '<title>StockKnight Arena</title>');
+  .replace('<title>Maki</title>', '<title>Maki Arena</title>');
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1];
 html = `${head.trim()}\n${body.trim()}\n`;
 

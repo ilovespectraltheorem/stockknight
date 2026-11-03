@@ -1,4 +1,6 @@
-# The StockKnight website
+# The Maki website
+
+Maki is the game (formerly KnightChess); Stockhorse is its engine (formerly StockKnight).
 
 A static site in `web/` with a small optional server for online games. It uses the reference
 engine (`reference/engine.js`) for the rules and the engine, so the site plays exactly the game

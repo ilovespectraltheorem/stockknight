@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StockKnight</title>
-  <meta name="description" content="Play KnightChess, the 6×6 drop variant, against the StockKnight engine or a friend, and review your games move by move.">
+  <title>Maki</title>
+  <meta name="description" content="Play Maki, the 6×6 drop game, against the Stockhorse engine or a friend, and review your games move by move.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#/" aria-label="StockKnight home">
+    <a class="brand" href="#/" aria-label="Maki home">
       <span class="brand-mark" id="brandMark"></span>
-      <span class="brand-name">Stock<b>Knight</b></span>
+      <span class="brand-name"><b>Maki</b></span>
     </a>
     <nav class="nav">
       <a href="#/" data-nav="home">Play</a>
@@ -29,9 +29,9 @@
     <section class="view" id="view-home">
       <div class="hero">
         <div class="hero-text">
-          <p class="eyebrow">KnightChess · 6×6 · drops</p>
+          <p class="eyebrow">Maki · 6×6 · drops</p>
           <h1>Every square is two steps and a turn away.</h1>
-          <p class="lede">A small board, a reserve to drop from, and a knight that still moves in its L. Play the StockKnight engine, sit a friend down beside you, or send them a link. Then review the game to see which moves were brilliant and which were blunders.</p>
+          <p class="lede">A small board, a reserve to drop from, and a knight that still moves in its L. Play Stockhorse, the engine, sit a friend down beside you, or send them a link. Then review the game to see which moves were brilliant and which were blunders.</p>
         </div>
         <div class="hero-art" id="heroArt" aria-hidden="true"></div>
       </div>
@@ -39,7 +39,7 @@
       <div class="modes">
         <button class="mode-card" data-mode="pve">
           <span class="mode-icon" data-piece="N"></span>
-          <span class="mode-title">Play the engine</span>
+          <span class="mode-title">Play Stockhorse</span>
           <span class="mode-sub">Four opponents, from a Page who blunders to a Champion who doesn't.</span>
         </button>
         <button class="mode-card" data-mode="local">
@@ -55,7 +55,7 @@
         <button class="mode-card" data-mode="review">
           <span class="mode-icon" data-piece="B"></span>
           <span class="mode-title">Review a game</span>
-          <span class="mode-sub">Move-by-move analysis with accuracy, an evaluation graph and the engine's best line.</span>
+          <span class="mode-sub">Move-by-move analysis with accuracy, an evaluation graph and Stockhorse's best line.</span>
         </button>
       </div>
 
@@ -82,7 +82,7 @@
           <div class="controls">
             <button class="btn" id="btnUndo" title="Take back">↶ Take back</button>
             <button class="btn" id="btnFlip" title="Flip board">⇅ Flip</button>
-            <button class="btn" id="btnEval" title="Show the engine's evaluation">Eval bar</button>
+            <button class="btn" id="btnEval" title="Show Stockhorse's evaluation">Eval bar</button>
             <button class="btn danger" id="btnResign">Resign</button>
           </div>
           <div class="controls">
@@ -152,8 +152,8 @@
     <!-- Rules ------------------------------------------------------------------------------ -->
     <section class="view" id="view-rules" hidden>
       <article class="rules">
-        <h2>KnightChess in two minutes</h2>
-        <p>The rules every StockKnight component plays by (ruleset <code>knightchess-2</code>).</p>
+        <h2>Maki in two minutes</h2>
+        <p>The rules Stockhorse and every part of this site play by (ruleset <code>knightchess-2</code>).</p>
         <h3>Board and pieces</h3>
         <ul>
           <li>6×6 board. White sets up on rank 1 as bishop, knight, queen, king, knight, rook, with pawns on rank 2. Black's setup is the same rotated half a turn.</li>
