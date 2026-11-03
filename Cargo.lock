@@ -58,6 +58,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sk-tb"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+]
+
+[[package]]
 name = "stockknight"
 version = "0.1.0"
 dependencies = [

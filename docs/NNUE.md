@@ -26,7 +26,7 @@ two agree.
 ## `.nnue` file
 
 `SKNN` magic, version 1, input count, accumulator size, the two hidden sizes, the output scale,
-a description that starts with the ruleset id (`knightchess-1`; other rulesets are refused),
+a description that starts with the ruleset id (`knightchess-2`; other rulesets are refused),
 then all weights as little-endian float32: feature transformer `[inputs][ft]` and bias, hidden
 layers `[out][in]` and biases, output weights and bias. 256-32-32 networks are about 15 MB.
 

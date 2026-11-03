@@ -20,7 +20,7 @@ from skpy.records import fen, fit_k, load, result_stm, score  # noqa: E402
 
 
 def records():
-    path = os.environ.get("SK_RECORDS", REPO / "runs" / "pilot" / "round1.val.bin")
+    path = os.environ.get("SK_RECORDS", REPO / "testdata" / "kc2-sample.val.bin")
     return load(path, limit=300)
 
 

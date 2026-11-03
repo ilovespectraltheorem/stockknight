@@ -142,9 +142,6 @@ impl Position {
                     }
                     pos.king_sq[color as usize] = sq;
                 }
-                if kind == PAWN && rank == far_rank(color) {
-                    return bad("pawn on its far rank");
-                }
                 pos.board[sq as usize] = code;
                 file += 1;
             }
@@ -282,7 +279,8 @@ impl Position {
 
     // --- attacks ------------------------------------------------------------------------------
 
-    /// Whether `sq` is attacked by a piece of color `by`. Kings never attack.
+    /// Whether `sq` is attacked by a piece of color `by`. Kings attack their neighbours, so two
+    /// kings can never stand next to each other.
     pub fn is_attacked(&self, sq: u8, by: u8) -> bool {
         let t = tables();
         let b = &self.board;
@@ -299,7 +297,11 @@ impl Position {
             return true;
         }
         let queen = make_code(QUEEN, by);
-        if t.king[sq].iter().any(|&s| b[s as usize] == queen) {
+        let king = make_code(KING, by);
+        if t.king[sq]
+            .iter()
+            .any(|&s| b[s as usize] == queen || b[s as usize] == king)
+        {
             return true;
         }
         let bishop = make_code(BISHOP, by);
@@ -401,10 +403,7 @@ impl Position {
         let hand = &self.hand[us as usize];
         if hand[PAWN as usize] > 0 {
             for to in 0..36u8 {
-                if b[to as usize] != 0
-                    || rank_of(to) == far_rank(us)
-                    || self.pawn_file[us as usize][file_of(to) as usize] != 0
-                {
+                if b[to as usize] != 0 || self.pawn_file[us as usize][file_of(to) as usize] != 0 {
                     continue;
                 }
                 list.push(encode_move(0, to, PAWN));

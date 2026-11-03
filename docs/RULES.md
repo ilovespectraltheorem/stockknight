@@ -1,4 +1,4 @@
-# KnightChess rules (ruleset `knightchess-1`)
+# KnightChess rules (ruleset `knightchess-2`)
 
 These are the frozen rules that every StockKnight component implements: the JavaScript
 reference engine (`reference/engine.js`), the Rust core, the WebAssembly build and the game
@@ -45,15 +45,17 @@ A pawn's options depend on which half of the board it stands on.
 
 **Everywhere:**
 
-- A pawn may never enter the opponent's back rank (rank 6 for White, rank 1 for Black), by
-  moving, capturing or being dropped. So a White pawn on rank 5 can only move or capture
-  sideways.
+- A pawn can always move or capture one square straight forward, including onto the
+  opponent's back rank (rank 6 for White, rank 1 for Black). So a White pawn on rank 5 gives
+  check to a king on the square in front of it. A pawn on the opponent's back rank can only
+  move or capture sideways.
 - No double step, no en passant, no promotion.
 
 ## Kings and check
 
-- Kings never capture each other and never attack each other, so a king never gives check.
-  Kings may stand on adjacent squares.
+- A king attacks the squares around it, as in chess. So two kings can never stand next to
+  each other, and a king cannot capture a piece the other king defends. A king never captures
+  the other king.
 - A king is in check when an enemy piece other than the king attacks its square.
 - You may not make a move that leaves your own king in check.
 
@@ -63,7 +65,8 @@ Instead of moving a piece, a player may place a piece from their reserve on any 
 
 - Captured pieces are removed from the game. They never go to anyone's reserve.
 - A pawn may not be dropped on a file that already holds one of your own pawns.
-- A pawn may not be dropped on the opponent's back rank.
+- A pawn may be dropped on any rank, including the opponent's back rank, where it can only
+  move sideways.
 - A rook or bishop may be dropped only while you have fewer than 2 rooks and bishops in total
   on the board.
 - A drop may give check or checkmate.

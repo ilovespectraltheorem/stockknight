@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maki</title>
+  <meta name="description" content="Play Maki, the 6×6 drop game, against the Stockhorse engine or a friend, and review your games move by move.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/" aria-label="Maki home">
+      <span class="brand-mark" id="brandMark"></span>
+      <span class="brand-name"><b>Maki</b></span>
+    </a>
+    <nav class="nav">
+      <a href="#/" data-nav="home">Play</a>
+      <a href="#/review" data-nav="review">Review</a>
+      <a href="#/rules" data-nav="rules">Rules</a>
+    </nav>
+    <button class="icon-btn" id="themeBtn" title="Board colours" aria-label="Change board colours">
+      <svg viewBox="0 0 24 24"><path d="M4 4h8v8H4zM12 12h8v8h-8z"/><path d="M12 4h8v8h-8zM4 12h8v8H4z" opacity=".35"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- Home -------------------------------------------------------------------------------- -->
+    <section class="view" id="view-home">
+      <div class="hero">
+        <div class="hero-text">
+          <p class="eyebrow">Maki · 6×6 · drops</p>
+          <h1>Every square is two steps and a turn away.</h1>
+          <p class="lede">A small board, a reserve to drop from, and a knight that still moves in its L. Play Stockhorse, the engine, sit a friend down beside you, or send them a link. Then review the game to see which moves were brilliant and which were blunders.</p>
+        </div>
+        <div class="hero-art" id="heroArt" aria-hidden="true"></div>
+      </div>
+
+      <div class="modes">
+        <button class="mode-card" data-mode="pve">
+          <span class="mode-icon" data-piece="N"></span>
+          <span class="mode-title">Play Stockhorse</span>
+          <span class="mode-sub">Four opponents, from a Page who blunders to a Champion who doesn't.</span>
+        </button>
+        <button class="mode-card" data-mode="local">
+          <span class="mode-icon" data-piece="R"></span>
+          <span class="mode-title">Pass and play</span>
+          <span class="mode-sub">Two players, one screen. The board turns to face whoever is to move.</span>
+        </button>
+        <button class="mode-card" data-mode="online" id="onlineCard">
+          <span class="mode-icon" data-piece="Q"></span>
+          <span class="mode-title">Play a friend online</span>
+          <span class="mode-sub" id="onlineSub">Make a room and send the link. Moves are checked on the server.</span>
+        </button>
+        <button class="mode-card" data-mode="review">
+          <span class="mode-icon" data-piece="B"></span>
+          <span class="mode-title">Review a game</span>
+          <span class="mode-sub">Move-by-move analysis with accuracy, an evaluation graph and Stockhorse's best line.</span>
+        </button>
+      </div>
+
+      <div class="recent" id="recentWrap" hidden>
+        <h2>Recent games</h2>
+        <ul class="recent-list" id="recentList"></ul>
+      </div>
+    </section>
+
+    <!-- Play ------------------------------------------------------------------------------- -->
+    <section class="view" id="view-play" hidden>
+      <div class="arena">
+        <div class="board-col">
+          <div class="player-bar" id="barTop"></div>
+          <div class="board-wrap">
+            <div class="evalbar" id="playEval" hidden><div class="evalbar-fill"></div><span class="evalbar-text"></span></div>
+            <div class="board" id="playBoard"></div>
+          </div>
+          <div class="player-bar" id="barBottom"></div>
+        </div>
+        <aside class="panel">
+          <div class="status" id="playStatus"></div>
+          <ol class="moves" id="playMoves"></ol>
+          <div class="controls">
+            <button class="btn" id="btnUndo" title="Take back">↶ Take back</button>
+            <button class="btn" id="btnFlip" title="Flip board">⇅ Flip</button>
+            <button class="btn" id="btnEval" title="Show Stockhorse's evaluation">Eval bar</button>
+            <button class="btn danger" id="btnResign">Resign</button>
+          </div>
+          <div class="controls">
+            <button class="btn" id="btnNew">New game</button>
+            <button class="btn primary" id="btnReviewThis">Review this game</button>
+          </div>
+          <div class="share" id="sharePanel" hidden>
+            <p id="shareText">Send this link to your opponent:</p>
+            <div class="share-row"><input id="shareLink" readonly><button class="btn" id="btnCopy">Copy</button></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Review ----------------------------------------------------------------------------- -->
+    <section class="view" id="view-review" hidden>
+      <div class="review-empty" id="reviewEmpty">
+        <h2>Review a game</h2>
+        <p>Pick one of your recent games, or paste a move list (UCI moves separated by spaces, such as <code>b2b3 c5c4 R@c4</code>).</p>
+        <ul class="recent-list" id="reviewRecent"></ul>
+        <textarea id="importMoves" rows="3" placeholder="b2b3 c5c4 …"></textarea>
+        <div class="controls"><button class="btn primary" id="btnImport">Review these moves</button></div>
+        <p class="error" id="importError" hidden></p>
+      </div>
+
+      <div class="arena" id="reviewArena" hidden>
+        <div class="board-col">
+          <div class="player-bar" id="rBarTop"></div>
+          <div class="board-wrap">
+            <div class="evalbar" id="reviewEval"><div class="evalbar-fill"></div><span class="evalbar-text"></span></div>
+            <div class="board" id="reviewBoard"></div>
+          </div>
+          <div class="player-bar" id="rBarBottom"></div>
+          <div class="navrow">
+            <button class="btn" data-step="start" title="Start (Home)">⏮</button>
+            <button class="btn" data-step="prev" title="Back (←)">◀</button>
+            <button class="btn" data-step="next" title="Forward (→)">▶</button>
+            <button class="btn" data-step="end" title="End (End)">⏭</button>
+            <button class="btn" id="rFlip" title="Flip board">⇅</button>
+          </div>
+        </div>
+        <aside class="panel">
+          <div class="progress" id="reviewProgress" hidden>
+            <div class="progress-text">Analysing… <span id="progressText"></span></div>
+            <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+          </div>
+          <div class="summary" id="reviewSummary" hidden></div>
+          <div class="coach" id="coach"></div>
+          <svg class="graph" id="evalGraph" viewBox="0 0 300 80" preserveAspectRatio="none" role="img" aria-label="Evaluation over the game"></svg>
+          <ol class="moves" id="reviewMoves"></ol>
+          <div class="controls">
+            <label class="depth">Depth
+              <select id="reviewDepth">
+                <option value="250">Quick</option>
+                <option value="700" selected>Standard</option>
+                <option value="1800">Deep</option>
+              </select>
+            </label>
+            <button class="btn" id="btnReanalyse">Analyse again</button>
+            <button class="btn" id="btnCopyMoves">Copy moves</button>
+            <button class="btn" id="btnOther">Other games</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Rules ------------------------------------------------------------------------------ -->
+    <section class="view" id="view-rules" hidden>
+      <article class="rules">
+        <h2>Maki in two minutes</h2>
+        <p>The rules Stockhorse and every part of this site play by (ruleset <code>knightchess-2</code>).</p>
+        <h3>Board and pieces</h3>
+        <ul>
+          <li>6×6 board. White sets up on rank 1 as bishop, knight, queen, king, knight, rook, with pawns on rank 2. Black's setup is the same rotated half a turn.</li>
+          <li><b>King</b> and <b>queen</b> both step one square in any direction. No castling.</li>
+          <li><b>Rook</b>, <b>bishop</b> and <b>knight</b> move as in chess.</li>
+          <li>A king attacks the 8 squares around it, as in chess, so the two kings can never stand next to each other.</li>
+        </ul>
+        <h3>Pawns</h3>
+        <ul>
+          <li>A pawn can always move or capture one square straight ahead, all the way to the far rank. It never captures diagonally.</li>
+          <li>In the opponent's half (ranks 4–6 for White) it can also move or capture one square left or right.</li>
+          <li>A pawn never moves backwards. No double step, en passant or promotion: a pawn on the far rank can only step sideways.</li>
+        </ul>
+        <h3>Drops</h3>
+        <ul>
+          <li>Each side starts with 2 pawns, 1 rook and 1 bishop in reserve. Instead of moving, you may drop one on any empty square.</li>
+          <li>Captured pieces leave the game; they never join a reserve.</li>
+          <li>No pawn drop on a file that already has one of your own pawns; any rank is fine, the far rank included. A rook or bishop drop needs fewer than 2 of your rooks and bishops on the board.</li>
+        </ul>
+        <h3>Winning</h3>
+        <ul>
+          <li>If you have no legal move, you lose. Checkmate <i>and</i> stalemate both lose.</li>
+          <li>Draws: the same position three times, or bare kings with empty reserves.</li>
+        </ul>
+        <p class="muted">To drop, click a piece in your reserve (beside the board) and then an empty square.</p>
+      </article>
+    </section>
+  </main>
+
+  <!-- Dialogs ------------------------------------------------------------------------------- -->
+  <dialog id="dlgPve" class="dialog">
+    <form method="dialog">
+      <h2>Choose your opponent</h2>
+      <div class="opponents" id="opponents"></div>
+      <h3>Play as</h3>
+      <div class="seg" id="colorSeg">
+        <label><input type="radio" name="color" value="w" checked><span>White</span></label>
+        <label><input type="radio" name="color" value="random"><span>Random</span></label>
+        <label><input type="radio" name="color" value="b"><span>Black</span></label>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok" id="pveStart">Play</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgOnline" class="dialog">
+    <form method="dialog">
+      <h2>Play a friend online</h2>
+      <div id="openGamesWrap" hidden>
+        <h3>Open games</h3>
+        <ul class="open-games" id="openGames"><li class="muted">Looking for games…</li></ul>
+      </div>
+      <h3>Join with a code</h3>
+      <div class="share-row"><input id="joinCode" placeholder="e.g. k7pm2x" autocomplete="off" maxlength="12"><button class="btn" value="code">Join</button></div>
+      <h3>Or make a new game, playing as</h3>
+      <div class="seg">
+        <label><input type="radio" name="ocolor" value="w" checked><span>White</span></label>
+        <label><input type="radio" name="ocolor" value="random"><span>Random</span></label>
+        <label><input type="radio" name="ocolor" value="b"><span>Black</span></label>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Make a game</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgResult" class="dialog result">
+    <form method="dialog">
+      <div class="result-mark" id="resultMark"></div>
+      <h2 id="resultTitle"></h2>
+      <p id="resultText"></p>
+      <div class="dialog-actions">
+        <button class="btn" value="close">Look at the board</button>
+        <button class="btn" value="again" id="resultAgain">Play again</button>
+        <button class="btn primary" value="review">Review the game</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../reference/engine.js"></script>
+  <script src="engine-tasks.js"></script>
+  <script src="review.js"></script>
+  <script src="pieces.js"></script>
+  <script src="online.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

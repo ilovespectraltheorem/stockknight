@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-RULESET = "knightchess-1"
+RULESET = "knightchess-2"
 REPO = Path(__file__).resolve().parents[2]
 
 

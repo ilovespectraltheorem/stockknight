@@ -1,13 +1,13 @@
-b2b3       26     14401  rnkqnb/pppppp/6/6/PPPPPP/BNQKNR[PPRBpprb] w 0 1
-e5e4      -44     81290  1rk1qb/3pp1/1PPP2/P5/p1K2p/BN3R[RBrb] b 2 21
-c3b5      211     57397  rn1kqb/pp1ppp/2pP2/1PN2R/PQP1PP/3KNR[PPBprb] w 0 9
-e2e3      305    117674  rn1qnb/1pp1k1/p2Npp/1PNP2/P1P1PP/B1QKR1[PPRBpprb] w 3 7
-b4c4     -287     29019  1r2n1/pp1k1p/1Pp3/P4P/1QPPP1/3K1R[Pppr] w 0 16
-f3c3       74    554493  r1k1n1/p2qb1/1P1pPp/2p2R/PQPPK1/B5[PPRBprb] w 0 17
-R@c3      208    639902  rnk1n1/1p1pqp/pP3P/4p1/P5/2QKR1[PPRBp] w 0 15
-d3c4      280    146621  rk4/1B2bp/2pp2/P2K2/2PP1P/1NR3[PRprb] w 0 22
-e6f4       71     25807  k1r1n1/p2p2/1q2PR/1pp3/R2PP1/P1PK2[B] b 2 20
-e4f6      164   1832663  rnq2b/1p1p1p/p2kN1/1P4/P1P1pP/1NQK1R[PPRBpprb] w 1 12
-c1d1     -456     31828  1rkqnb/p1ppP1/1P4/1p2pN/P1PP1K/1NQnR1[RBpprb] w 2 13
-e3c5       59    112262  pp1q1b/1knpp1/6/2P1BR/1P2P1/rNQ1K1[PRrb] w 0 19
-depth 6: 3643357 nodes, 5735 ms, 635285 nodes/s
+b2b3       26     14293  rnkqnb/pppppp/6/6/PPPPPP/BNQKNR[PPRBpprb] w 0 1
+f2f1      259    215564  1rk1qb/3pp1/1PPP2/P5/p1K2p/BN3R[RBrb] b 2 21
+d4d5      256    102466  rn1kqb/pp1ppp/2pP2/1PN2R/PQP1PP/3KNR[PPBprb] w 0 9
+e2e3      305    132776  rn1qnb/1pp1k1/p2Npp/1PNP2/P1P1PP/B1QKR1[PPRBpprb] w 3 7
+b4c4     -287     40070  1r2n1/pp1k1p/1Pp3/P4P/1QPPP1/3K1R[Pppr] w 0 16
+f3c3       74    684701  r1k1n1/p2qb1/1P1pPp/2p2R/PQPPK1/B5[PPRBprb] w 0 17
+e1e3      254   1273113  rnk1n1/1p1pqp/pP3P/4p1/P5/2QKR1[PPRBp] w 0 15
+d3c4      201    101525  rk4/1B2bp/2pp2/P2K2/2PP1P/1NR3[PRprb] w 0 22
+e6f4       71     28053  k1r1n1/p2p2/1q2PR/1pp3/R2PP1/P1PK2[B] b 2 20
+e4f6      176   1898365  rnq2b/1p1p1p/p2kN1/1P4/P1P1pP/1NQK1R[PPRBpprb] w 1 12
+c1d1     -456     27164  1rkqnb/p1ppP1/1P4/1p2pN/P1PP1K/1NQnR1[RBpprb] w 2 13
+e3c5       59    115997  pp1q1b/1knpp1/6/2P1BR/1P2P1/rNQ1K1[PRrb] w 0 19
+depth 6: 4634087 nodes, 5875 ms, 788781 nodes/s
