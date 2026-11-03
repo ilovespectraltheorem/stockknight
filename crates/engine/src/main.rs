@@ -8,17 +8,19 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use sk_core::*;
-use sk_eval::{hand_eval, HandEval};
+use sk_eval::{hand_eval, Evaluator};
+use sk_nnue::{AnyEval, NnueMode};
 use sk_search::{level_limits, mate_in, Limits, SearchResult, Searcher, MATE_BOUND};
 
 const BENCH: &str = include_str!("../../../testdata/bench-positions.txt");
 
 struct Engine {
     pos: Position,
-    searcher: Arc<Mutex<Searcher<HandEval>>>,
+    searcher: Arc<Mutex<Searcher<AnyEval>>>,
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     random_margin: i32,
+    nnue_mode: NnueMode,
 }
 
 fn score_text(score: i32) -> String {
@@ -51,7 +53,7 @@ fn say(line: &str) {
 
 impl Engine {
     fn new() -> Self {
-        let searcher = Searcher::new(HandEval);
+        let searcher = Searcher::new(AnyEval::Hand);
         let stop = searcher.stop_handle();
         Engine {
             pos: Position::startpos(),
@@ -59,6 +61,7 @@ impl Engine {
             stop,
             worker: None,
             random_margin: 0,
+            nnue_mode: NnueMode::Quantized,
         }
     }
 
@@ -82,6 +85,8 @@ impl Engine {
                 say("id name StockKnight 0.1");
                 say("id author StockKnight authors");
                 say("option name RandomMargin type spin default 0 min 0 max 1000");
+                say("option name EvalFile type string default none");
+                say("option name NnueMode type combo default quantized var quantized var avx2 var portable var float");
                 say("uciok");
             }
             "isready" => say("readyok"),
@@ -112,7 +117,15 @@ impl Engine {
                     .collect();
                 say(&moves.join(" "));
             }
-            "eval" => say(&format!("G0 {} cp (side to move)", hand_eval(&self.pos))),
+            "eval" => {
+                let mut s = self.searcher.lock().unwrap();
+                let name = s.eval.name();
+                let value = s.eval.evaluate(&self.pos);
+                say(&format!(
+                    "{name} {value} cp, G0 {} cp (side to move)",
+                    hand_eval(&self.pos)
+                ));
+            }
             "status" => say(&self.pos.outcome().code()),
             "perft" => {
                 let depth = words.get(1).and_then(|s| s.parse().ok()).unwrap_or(1);
@@ -125,7 +138,7 @@ impl Engine {
             }
             "bench" => {
                 let depth = words.get(1).and_then(|s| s.parse().ok()).unwrap_or(7);
-                bench(depth);
+                bench(depth, &mut self.searcher.lock().unwrap());
             }
             _ => say(&format!("info string unknown command: {line}")),
         }
@@ -144,6 +157,23 @@ impl Engine {
         match (name.copied(), value) {
             (Some("RandomMargin"), Some(v)) => self.random_margin = v.parse().unwrap_or(0),
             (Some("Hash"), _) => {} // fixed-size table for now
+            (Some("NnueMode"), Some(v)) => match NnueMode::parse(v) {
+                Some(m) => {
+                    self.nnue_mode = m;
+                    self.searcher.lock().unwrap().eval.set_mode(m);
+                }
+                None => say(&format!("info string unknown NnueMode {v}")),
+            },
+            (Some("EvalFile"), v) => match AnyEval::from_file(v.copied().unwrap_or("none")) {
+                Ok(mut e) => {
+                    e.set_mode(self.nnue_mode);
+                    let mut s = self.searcher.lock().unwrap();
+                    s.eval = e;
+                    s.clear();
+                    say(&format!("info string evaluation {}", s.eval.name()));
+                }
+                Err(e) => say(&format!("info string error {e}")),
+            },
             _ => say("info string unknown option"),
         }
     }
@@ -239,12 +269,13 @@ impl Engine {
     }
 }
 
-fn bench(depth: i32) {
+/// Searches the bench positions with the current evaluation, each from a cleared searcher.
+fn bench(depth: i32, s: &mut Searcher<AnyEval>) {
     let start = Instant::now();
     let mut total = 0;
     for fen in BENCH.lines().map(str::trim).filter(|l| !l.is_empty()) {
         let mut pos = Position::from_fen(fen).expect("bench FEN");
-        let mut s = Searcher::new(HandEval);
+        s.clear();
         let r = s.think(
             &mut pos,
             Limits {
@@ -262,8 +293,10 @@ fn bench(depth: i32) {
         ));
     }
     let ms = start.elapsed().as_millis().max(1);
+    s.clear();
     say(&format!(
-        "depth {depth}: {total} nodes, {ms} ms, {} nodes/s",
+        "{} depth {depth}: {total} nodes, {ms} ms, {} nodes/s",
+        s.eval.name(),
         total as u128 * 1000 / ms
     ));
 }

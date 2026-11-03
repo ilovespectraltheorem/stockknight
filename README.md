@@ -3,13 +3,15 @@
 A Stockfish-style engine for **KnightChess** (a 6×6 drop-chess variant) and an online platform
 to play and evaluate games.
 
-- Rules: [docs/RULES.md](docs/RULES.md) (ruleset `knightchess-1`)
+- Rules: [docs/RULES.md](docs/RULES.md) (ruleset `knightchess-2`)
 - Plan: the StockKnight engine, training and platform plan (shared separately)
 
 ## Status
 
 Workstreams A (rules freeze) and B (Rust engine) are in place, and the Phase 1 gate passes:
-the Rust engine equals the JS reference move for move.
+the Rust engine equals the JS reference move for move. Self-play data (Phase 2), the first
+trained network G1 (Phase 3) and fast quantized network inference (Phase 4) follow; see
+`docs/RESULTS.md`.
 
 | Path | Contents |
 |---|---|
@@ -23,6 +25,11 @@ the Rust engine equals the JS reference move for move.
 | `crates/search` (`sk-search`) | Alpha-beta search, generic over the evaluator; strength levels |
 | `crates/engine` (`stockknight`) | The engine binary (UCI-like protocol) |
 | `crates/match` (`sk-match`) | Engine-vs-engine matches: openings, parallel games, adjudication, Elo, SPRT, JSON |
+| `crates/data` (`sk-data`), `crates/datagen` (`sk-datagen`) | Training records (`docs/DATA.md`) and self-play data generation |
+| `crates/nnue` (`sk-nnue`) | Network inputs, `.nnue` files, float reference, quantized incremental inference (`docs/NNUE.md`) |
+| `crates/tb` (`sk-tb`) | Endgame tablebases: exact results and distance to the end by retrograde analysis (`docs/TABLEBASES.md`) |
+| `python/skpy` | Record loading, the PyTorch trainer, league maths and the generation loop (`docs/LEAGUE.md`) |
+| `python/skpy/harness`, `./sk`, `configs/` | The training harness: resumable runs, configs, status, reports, dashboard, doctor, smoke (`docs/HARNESS.md`) |
 
 ```sh
 cargo build --release --offline && cargo test --release --offline

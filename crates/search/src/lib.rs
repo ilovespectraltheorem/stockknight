@@ -314,6 +314,9 @@ impl<E: Evaluator> Searcher<E> {
         mut beta: i32,
         ply: i32,
     ) -> i32 {
+        if self.stopped {
+            return 0;
+        }
         self.nodes += 1;
         self.check_limits();
         if self.stopped {
@@ -430,6 +433,9 @@ impl<E: Evaluator> Searcher<E> {
     }
 
     fn quiesce(&mut self, pos: &mut Position, mut alpha: i32, beta: i32, ply: i32) -> i32 {
+        if self.stopped {
+            return 0;
+        }
         self.nodes += 1;
         self.check_limits();
         if self.stopped {

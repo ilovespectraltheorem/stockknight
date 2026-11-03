@@ -8,3 +8,4 @@ description = "The StockKnight engine (UCI-like protocol)"
 sk-core = { path = "../core" }
 sk-eval = { path = "../eval" }
 sk-search = { path = "../search" }
+sk-nnue = { path = "../nnue" }

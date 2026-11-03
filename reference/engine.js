@@ -3,7 +3,7 @@
 // evaluation G0 and the alpha-beta search. The Rust engine is a port of this file and must
 // reproduce it exactly: same move generation order, same hash keys, same search tree.
 
-const RULESET = 'knightchess-1';
+const RULESET = 'knightchess-2';
 
 // ---------------------------------------------------------------------------------------------
 // Conventions (docs/RULES.md, "Notation")
@@ -35,7 +35,6 @@ const moveFrom = m => (m >> 6) & 63;
 const moveDrop = m => m >> 12;
 
 // The rank a pawn of `color` may never enter, and whether a rank is in that pawn's enemy half.
-const farRank = color => (color === WHITE ? 5 : 0);
 const inEnemyHalf = (color, rank) => (color === WHITE ? rank >= 3 : rank <= 2);
 
 // ---------------------------------------------------------------------------------------------
@@ -88,8 +87,8 @@ const PAWN_STEPS = [WHITE, BLACK].map(color => {
     const list = [];
     const f = fileOf(sq), r = rankOf(sq);
     const fr = r + (color === WHITE ? 1 : -1);
-    if (fr >= 0 && fr < 6 && fr !== farRank(color)) list.push(fr * 6 + f);
-    if (inEnemyHalf(color, r) && r !== farRank(color)) {
+    if (fr >= 0 && fr < 6) list.push(fr * 6 + f);
+    if (inEnemyHalf(color, r)) {
       if (f > 0) list.push(r * 6 + f - 1);
       if (f < 5) list.push(r * 6 + f + 1);
     }
@@ -180,9 +179,6 @@ class Position {
           if (type === KING) {
             if (this.kingSq[color] >= 0) throw new Error(`bad FEN: two kings: ${fen}`);
             this.kingSq[color] = sq;
-          }
-          if (type === PAWN && rank === farRank(color)) {
-            throw new Error(`bad FEN: pawn on its far rank: ${fen}`);
           }
           this.board[sq] = code;
           file++;
@@ -283,7 +279,8 @@ class Position {
 
   // --- attacks --------------------------------------------------------------------------------
 
-  // Whether `sq` is attacked by a piece of color `by`. Kings never attack.
+  // Whether `sq` is attacked by a piece of color `by`. Kings attack their neighbours, so two
+  // kings can never stand next to each other.
   isAttacked(sq, by) {
     const b = this.board;
     const pawn = makeCode(PAWN, by);
@@ -291,7 +288,8 @@ class Position {
     const knight = makeCode(KNIGHT, by);
     for (const from of KNIGHT_JUMPS[sq]) if (b[from] === knight) return true;
     const queen = makeCode(QUEEN, by);
-    for (const from of KING_STEPS[sq]) if (b[from] === queen) return true;
+    const king = makeCode(KING, by);
+    for (const from of KING_STEPS[sq]) if (b[from] === queen || b[from] === king) return true;
     const bishop = makeCode(BISHOP, by);
     for (const ray of DIAG_RAYS[sq]) {
       for (const s of ray) {
@@ -355,7 +353,7 @@ class Position {
     const hand = this.hand[us];
     if (hand[PAWN] > 0) {
       for (let to = 0; to < 36; to++) {
-        if (b[to] || rankOf(to) === farRank(us) || this.pawnFile[us][fileOf(to)]) continue;
+        if (b[to] || this.pawnFile[us][fileOf(to)]) continue;
         list.push(encodeMove(0, to, PAWN));
       }
     }

@@ -1,0 +1,12 @@
+[package]
+name = "sk-datagen"
+version.workspace = true
+edition.workspace = true
+description = "Self-play training data: run, stats, dump, dedup"
+
+[dependencies]
+sk-core = { path = "../core" }
+sk-eval = { path = "../eval" }
+sk-search = { path = "../search" }
+sk-data = { path = "../data" }
+sk-nnue = { path = "../nnue" }

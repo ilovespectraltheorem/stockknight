@@ -1,0 +1,78 @@
+# Tiny settings for ./sk smoke: three generations in a few minutes.
+# StockKnight run configuration. Edit freely: it is re-read between steps.
+
+[run]
+description = "smoke test"
+seed = 1
+
+[hardware]
+threads = 0
+train_threads = 0
+min_free_disk_gb = 0.5
+
+[datagen]
+positions = 6000
+growth = 0.0
+max_positions = 0
+shard_minutes = 0.01
+shard_positions = 1500
+nodes = 1500
+random_plies = 8
+opening_limit = 600
+max_plies = 400
+adjudicate = 1500
+adjudicate_plies = 8
+quiet_draw = 120
+record_quiet_limit = 40
+val_fraction = 0.01
+
+[training]
+window_rounds = 2
+window_positions = 0
+init = "teacher"
+lambda = 0.75
+epochs = 3
+patience = 3
+batch = 128
+lr = 0.001
+lr_decay = 0.3
+decay_every = 5
+K = 0.0
+ft = 256
+l1 = 32
+l2 = 32
+output_scale = 600.0
+
+[match]
+condition = "nodes 300"
+concurrency = 0
+chunk_games = 20
+opening_plies = 8
+max_plies = 400
+adjudicate = 1500
+
+[gate]
+mode = "sprt"
+elo0 = 0.0
+elo1 = 10.0
+min_games = 20
+max_games = 40
+strict = true
+
+[league]
+recent = 20
+decay = 0.5
+minimum = 10
+backfill = true
+
+[stop]
+generations = 3
+hours = 0.0
+plateau = 0
+
+[storage]
+keep_shards = false
+keep_windows = false
+keep_checkpoints = false
+keep_rounds = 0
+keep_game_logs = true

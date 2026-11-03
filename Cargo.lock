@@ -7,6 +7,24 @@ name = "sk-core"
 version = "0.1.0"
 
 [[package]]
+name = "sk-data"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+]
+
+[[package]]
+name = "sk-datagen"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+ "sk-data",
+ "sk-eval",
+ "sk-nnue",
+ "sk-search",
+]
+
+[[package]]
 name = "sk-eval"
 version = "0.1.0"
 dependencies = [
@@ -22,6 +40,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sk-nnue"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+ "sk-data",
+ "sk-eval",
+ "sk-search",
+]
+
+[[package]]
 name = "sk-search"
 version = "0.1.0"
 dependencies = [
@@ -30,10 +58,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sk-tb"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+]
+
+[[package]]
 name = "stockknight"
 version = "0.1.0"
 dependencies = [
  "sk-core",
  "sk-eval",
+ "sk-nnue",
  "sk-search",
 ]

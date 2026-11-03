@@ -18,13 +18,13 @@ const play = (pos, ...ucis) => {
 };
 
 // Perft from the start position, depths 1-5: the reference numbers for every other engine.
-const PERFT = [10, 100, 1185, 13770, 181548];
+const PERFT = [10, 100, 1185, 13788, 181968];
 
 test('start position', () => {
   const pos = new E.Position();
   assert.equal(pos.fen(), E.START_FEN);
   assert.equal(pos.legalMoves().length, 10);
-  assert.equal(E.RULESET, 'knightchess-1');
+  assert.equal(E.RULESET, 'knightchess-2');
 });
 
 test('perft counts', () => {
@@ -50,12 +50,14 @@ test('pawn captures straight ahead and sideways, never diagonally', () => {
   assert.deepEqual(pieceMoves(enemy, 'c4'), ['c4b4', 'c4c5', 'c4d4']);
 });
 
-test('pawn never enters the far rank', () => {
-  const pos = new E.Position('2k3/2P3/6/6/6/3K2[-] w 0 1');
-  assert.deepEqual(pieceMoves(pos, 'c5'), ['c5b5', 'c5d5']);
-  assert.ok(!pos.inCheck(E.BLACK), 'a pawn on rank 5 does not attack rank 6');
+test('pawn enters the far rank and checks there', () => {
+  const pos = new E.Position('1k4/2P3/6/6/6/3K2[-] w 0 1');
+  assert.deepEqual(pieceMoves(pos, 'c5'), ['c5b5', 'c5c6', 'c5d5']);
+  assert.ok(new E.Position('2k3/2P3/6/6/6/3K2[-] b 0 1').inCheck(E.BLACK), 'a pawn on rank 5 attacks rank 6');
   const black = new E.Position('3k2/6/6/6/3p2/2K3[-] b 0 1');
-  assert.deepEqual(pieceMoves(black, 'd2'), ['d2c2', 'd2e2']);
+  assert.deepEqual(pieceMoves(black, 'd2'), ['d2c2', 'd2d1', 'd2e2']);
+  const far = new E.Position('2P3/6/6/k5/6/3K2[-] w 0 1');
+  assert.deepEqual(pieceMoves(far, 'c6'), ['c6b6', 'c6d6']);
 });
 
 test('black pawns mirror white pawns', () => {
@@ -72,13 +74,13 @@ test('pawn attacks follow the half it stands in', () => {
   assert.ok(!new E.Position('6/6/6/2k3/3P2/K5[-] b 0 1').inCheck(), 'no diagonal attack');
 });
 
-test('no pawn drop on the far rank', () => {
+test('pawns may be dropped on the far rank', () => {
   const pos = new E.Position('2k3/6/6/6/6/3K2[P] w 0 1');
   const drops = uciMoves(pos).filter(u => u.startsWith('P@'));
-  assert.equal(drops.length, 29);
-  assert.ok(drops.every(u => !u.endsWith('6')));
+  assert.equal(drops.length, 34);
+  assert.ok(drops.includes('P@a6'));
   const black = new E.Position('2k3/6/6/6/6/3K2[p] b 0 1');
-  assert.ok(uciMoves(black).filter(u => u.startsWith('P@')).every(u => !u.endsWith('1')));
+  assert.ok(uciMoves(black).filter(u => u.startsWith('P@')).includes('P@a1'));
 });
 
 test('pawn drop file rule follows sideways moves', () => {
@@ -100,11 +102,14 @@ test('sideways steps keep the quiet-ply counter, forward steps reset it', () => 
   assert.equal(pos.clock, 0);
 });
 
-test('kings may stand side by side and are never captured', () => {
-  const pos = new E.Position('6/6/2kK2/6/6/6[-] w 0 1');
-  assert.ok(!pos.inCheck(E.WHITE) && !pos.inCheck(E.BLACK));
-  assert.ok(!uciMoves(pos).includes('d4c4'));
-  assert.ok(uciMoves(pos).includes('d4c5'), 'moving next to the enemy king is legal');
+test('kings never stand next to each other', () => {
+  assert.throws(() => new E.Position('6/6/2kK2/6/6/6[-] w 0 1'));
+  const pos = new E.Position('6/6/1k1K2/6/6/6[-] w 0 1');
+  const moves = uciMoves(pos);
+  for (const u of ['d4c3', 'd4c4', 'd4c5']) assert.ok(!moves.includes(u), u);
+  assert.ok(moves.includes('d4e4'));
+  const guarded = new E.Position('6/6/1k1K2/2r3/6/6[-] w 0 1');
+  assert.ok(!uciMoves(guarded).includes('d4c3'), 'a king may not take a piece the other king defends');
 });
 
 test('rook and bishop drop cap', () => {
@@ -134,8 +139,6 @@ test('threefold repetition and bare kings draw; no fifty-move rule', () => {
 test('bad FENs are rejected', () => {
   for (const fen of [
     '2P3/6/6/6/6/3K2[-] w 0 1', // no black king
-    '2kP2/6/6/6/6/3K2[-] w 0 1', // white pawn on its far rank
-    '2k3/6/6/6/6/2pK2[-] w 0 1', // black pawn on its far rank
     '2k3/6/6/6/6/3K2[PPP] w 0 1', // three pawns in reserve
     '2k3/6/6/6/6/3K2[-] x 0 1',
     '2k3/6/6/6/3K2[-] w 0 1',

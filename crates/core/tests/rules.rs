@@ -36,14 +36,14 @@ fn play(p: &mut Position, moves: &[&str]) {
     }
 }
 
-const PERFT: [u64; 5] = [10, 100, 1185, 13770, 181548];
+const PERFT: [u64; 5] = [10, 100, 1185, 13788, 181968];
 
 #[test]
 fn start_position() {
     let mut p = Position::startpos();
     assert_eq!(p.to_fen(), START_FEN);
     assert_eq!(p.legal_moves().len(), 10);
-    assert_eq!(RULESET, "knightchess-1");
+    assert_eq!(RULESET, "knightchess-2");
 }
 
 #[test]
@@ -84,13 +84,18 @@ fn pawn_captures_straight_and_sideways_never_diagonally() {
 }
 
 #[test]
-fn pawn_never_enters_far_rank() {
-    let mut p = pos("2k3/2P3/6/6/6/3K2[-] w 0 1");
-    assert_eq!(piece_moves(&mut p, "c5"), ["c5b5", "c5d5"]);
-    assert!(!p.in_check(BLACK));
+fn pawn_enters_far_rank_and_checks_there() {
+    let mut p = pos("1k4/2P3/6/6/6/3K2[-] w 0 1");
+    assert_eq!(piece_moves(&mut p, "c5"), ["c5b5", "c5c6", "c5d5"]);
+    assert!(pos("2k3/2P3/6/6/6/3K2[-] b 0 1").in_check(BLACK));
     assert_eq!(
         piece_moves(&mut pos("3k2/6/6/6/3p2/2K3[-] b 0 1"), "d2"),
-        ["d2c2", "d2e2"]
+        ["d2c2", "d2d1", "d2e2"]
+    );
+    // On the far rank only sideways steps remain.
+    assert_eq!(
+        piece_moves(&mut pos("2P3/6/6/k5/6/3K2[-] w 0 1"), "c6"),
+        ["c6b6", "c6d6"]
     );
 }
 
@@ -115,13 +120,13 @@ fn pawn_attacks_follow_the_half() {
 }
 
 #[test]
-fn no_pawn_drop_on_far_rank() {
+fn pawns_may_be_dropped_on_far_rank() {
     let d = drops(&mut pos("2k3/6/6/6/6/3K2[P] w 0 1"), 'P');
-    assert_eq!(d.len(), 29);
-    assert!(d.iter().all(|u| !u.ends_with('6')));
+    assert_eq!(d.len(), 34);
+    assert!(d.iter().any(|u| u == "P@a6"));
     assert!(drops(&mut pos("2k3/6/6/6/6/3K2[p] b 0 1"), 'P')
         .iter()
-        .all(|u| !u.ends_with('1')));
+        .any(|u| u == "P@a1"));
 }
 
 #[test]
@@ -145,12 +150,15 @@ fn sideways_steps_keep_the_clock() {
 }
 
 #[test]
-fn kings_side_by_side() {
-    let mut p = pos("6/6/2kK2/6/6/6[-] w 0 1");
-    assert!(!p.in_check(WHITE) && !p.in_check(BLACK));
-    let moves = uci(&mut p);
-    assert!(!moves.contains(&"d4c4".to_string()));
-    assert!(moves.contains(&"d4c5".to_string()));
+fn kings_never_side_by_side() {
+    assert!(Position::from_fen("6/6/2kK2/6/6/6[-] w 0 1").is_err());
+    let moves = uci(&mut pos("6/6/1k1K2/6/6/6[-] w 0 1"));
+    for u in ["d4c3", "d4c4", "d4c5"] {
+        assert!(!moves.contains(&u.to_string()), "{u}");
+    }
+    assert!(moves.contains(&"d4e4".to_string()));
+    let guarded = uci(&mut pos("6/6/1k1K2/2r3/6/6[-] w 0 1"));
+    assert!(!guarded.contains(&"d4c3".to_string()));
 }
 
 #[test]
@@ -202,8 +210,6 @@ fn draws_and_no_fifty_move_rule() {
 fn bad_fens_are_rejected() {
     for fen in [
         "2P3/6/6/6/6/3K2[-] w 0 1",
-        "2kP2/6/6/6/6/3K2[-] w 0 1",
-        "2k3/6/6/6/6/2pK2[-] w 0 1",
         "2k3/6/6/6/6/3K2[PPP] w 0 1",
         "2k3/6/6/6/6/3K2[-] x 0 1",
         "2k3/6/6/6/3K2[-] w 0 1",
