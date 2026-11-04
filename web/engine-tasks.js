@@ -201,7 +201,76 @@
     };
   }
 
-  const api = { LEVELS, STRENGTH, settingFor, clampElo, thinkAt, play, analyse, build };
+  // { fen, moves, movetime, depth, multipv } -> { legal, depth, nodes, lines: [{ move, score, pv }] }
+  // The analysis board's search: the best `multipv` root moves, each with an exact score and its
+  // line, best first. The first `multipv` moves get a full window; every other move is tested
+  // with a null window against the current k-th best score and searched fully only when it beats
+  // it, so the board searches about as deep as a single-line search. Scores are from the side
+  // to move's view. The searcher keeps its hash table between calls, so calling again on the
+  // same position with a longer movetime picks up where the last call left off.
+  function lines({ fen, moves, movetime = 1000, depth = 40, multipv = 3 }) {
+    const pos = build(fen, moves);
+    const root = pos.legalMoves();
+    if (!root.length) return { legal: 0, depth: 0, nodes: 0, lines: [] };
+    const k = Math.max(1, Math.min(multipv | 0 || 1, root.length));
+    const full = SK.MATE + 1;
+
+    const s = getSearcher();
+    s.pos = pos;
+    s.nodes = 0;
+    s.stopped = false;
+    s.start = Date.now();
+    s.maxNodes = Infinity;
+    s.deadline = Infinity; // depth 1 always completes
+    s.killers.fill(0);
+    for (let i = 0; i < s.history.length; i++) s.history[i] >>= 2;
+
+    let order = root.slice(), out = null;
+    const maxDepth = Math.min(depth, 80);
+    for (let d = 1; d <= maxDepth; d++) {
+      const scores = new Map(); // exact for the top k, an upper bound for the rest
+      const top = []; // [score, move, pv], best first, at most k
+      let complete = true;
+      for (const m of order) {
+        pos.makeMove(m);
+        let score;
+        if (top.length < k) {
+          score = -s.negamax(d - 1, -full, full, 1);
+        } else {
+          const bar = top[k - 1][0];
+          score = -s.negamax(d - 1, -bar - 1, -bar, 1);
+          if (score > bar && !s.stopped) score = -s.negamax(d - 1, -full, full, 1);
+        }
+        pos.unmakeMove();
+        if (s.stopped) {
+          complete = false;
+          break;
+        }
+        scores.set(m, score);
+        if (top.length < k || score > top[k - 1][0]) {
+          // Read the line now, while the hash table still holds this move's search.
+          top.push([score, m, s.principalVariation(m, d)]);
+          top.sort((a, b) => b[0] - a[0]);
+          if (top.length > k) top.pop();
+        }
+      }
+      if (!complete) break;
+      out = { depth: d, top };
+      order = root.slice().sort((a, b) => scores.get(b) - scores.get(a));
+      if (d === 1) s.deadline = s.start + movetime;
+      const best = top[0][0];
+      if (Math.abs(best) >= MATE_BOUND && d >= SK.MATE - Math.abs(best)) break;
+      if (Date.now() - s.start > movetime / 2) break; // the next depth would not finish
+    }
+    return {
+      legal: root.length,
+      depth: out.depth,
+      nodes: s.nodes,
+      lines: out.top.map(([score, m, pv]) => ({ move: pos.moveToUci(m), score, pv: lineToUci(pos, pv) })),
+    };
+  }
+
+  const api = { LEVELS, STRENGTH, settingFor, clampElo, thinkAt, play, analyse, lines, build };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EngineTasks = api;
 })(typeof self !== 'undefined' ? self : globalThis);
