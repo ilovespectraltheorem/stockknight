@@ -420,18 +420,24 @@
 
   // --- opponents --------------------------------------------------------------------------
 
-  const OPPONENTS = [
-    { id: 'page', name: 'Page', piece: 'P', blurb: 'Still learning the L. Takes whatever looks shiny.' },
-    { id: 'squire', name: 'Squire', piece: 'B', blurb: 'Looks two moves ahead, with a little randomness.' },
-    { id: 'knight', name: 'Knight', piece: 'N', blurb: 'Seven plies deep, about a second a move.' },
-    { id: 'champion', name: 'Champion', piece: 'K', blurb: 'Three seconds a move at full strength.' },
+  // Strength bands for the Elo picker: a piece to show and a line about how it plays.
+  const STRENGTH = window.EngineTasks.STRENGTH;
+  const BANDS = [
+    { below: 800, piece: 'P', name: 'Beginner', blurb: 'Knows how the pieces move. Often leaves them hanging.' },
+    { below: 1200, piece: 'B', name: 'Casual', blurb: 'Takes what you leave loose, and leaves things loose too.' },
+    { below: 1600, piece: 'N', name: 'Club', blurb: 'Sees simple threats. Still misses plenty a few moves out.' },
+    { below: 2000, piece: 'R', name: 'Strong club', blurb: 'Rarely blunders outright. Punishes loose pieces.' },
+    { below: 2400, piece: 'Q', name: 'Expert', blurb: 'Calculates several moves deep and keeps up the pressure.' },
+    { below: 2950, piece: 'Q', name: 'Master', blurb: 'Few mistakes, and small ones.' },
+    { below: Infinity, piece: 'K', name: 'Full strength', blurb: 'Stockhorse at full strength, about two seconds a move.' },
   ];
+  const bandFor = elo => BANDS.find(b => elo < b.below);
 
   // --- play controller --------------------------------------------------------------------
 
   const play = {
     board: null,
-    game: null, // { id, mode, startFen, moves, white, black, result, level, humanColor }
+    game: null, // { id, mode, startFen, moves, white, black, result, elo, humanColor } (older games: level)
     pos: null,
     thinking: false,
     showEval: store.get('sk.showEval', false),
@@ -486,12 +492,11 @@
       let white = 'White', black = 'Black';
       if (opts.mode === 'pve') {
         humanColor = opts.color === 'random' ? (Math.random() < 0.5 ? WHITE : BLACK) : opts.color === 'b' ? BLACK : WHITE;
-        const opp = OPPONENTS.find(o => o.id === opts.level) || OPPONENTS[1];
-        const engineName = `${opp.name} (Stockhorse)`;
+        const engineName = `Stockhorse ${opts.elo}`;
         white = humanColor === WHITE ? 'You' : engineName;
         black = humanColor === BLACK ? 'You' : engineName;
       }
-      this.game = { id, mode: opts.mode, startFen: START_FEN, moves: [], white, black, result: null, level: opts.level, humanColor, date: Date.now() };
+      this.game = { id, mode: opts.mode, startFen: START_FEN, moves: [], white, black, result: null, elo: opts.elo, humanColor, date: Date.now() };
       this.pos = new Position(START_FEN);
       this.flipped = opts.mode === 'pve' ? humanColor === BLACK : false;
       $('#sharePanel').hidden = true;
@@ -556,7 +561,7 @@
       this.render();
       const started = Date.now();
       try {
-        const r = await engine.call('play', { fen: g.startFen, moves: g.moves.slice(), level: g.level });
+        const r = await engine.call('play', { fen: g.startFen, moves: g.moves.slice(), elo: g.elo, level: g.level });
         const wait = 450 - (Date.now() - started);
         if (wait > 0) await sleep(wait);
         if (token !== this.token) return;
@@ -721,7 +726,8 @@
         return `<button class="${cls}" data-type="${t}" title="${title}"${usable ? '' : ' tabindex="-1"'}>
           ${pieceSvg(LETTERS[t], colorKey(color))}${n > 1 ? `<span class="count">${n}</span>` : ''}</button>`;
       }).join('');
-      const avatarPiece = name.includes('Stockhorse') ? OPPONENTS.find(o => name.startsWith(o.name))?.piece || 'N' : 'N';
+      const eloMatch = /^Stockhorse (\d+)$/.exec(name);
+      const avatarPiece = eloMatch ? bandFor(+eloMatch[1]).piece : 'N';
       return `<div class="avatar">${pieceSvg(avatarPiece, colorKey(color))}</div>
         <div><div class="pname">${esc(name)}${thinking}</div><div class="psub">${sub}</div></div>
         <div class="reserve">${res}</div>${clock}`;
@@ -1377,23 +1383,58 @@
 
   function openPveDialog() {
     const dlg = $('#dlgPve');
-    const last = store.get('sk.level', 'squire');
-    $('#opponents').innerHTML = OPPONENTS.map(
-      o => `<label class="opp"><input type="radio" name="level" value="${o.id}"${o.id === last ? ' checked' : ''}>
-        <span>${pieceSvg(o.piece, 'b')}<span><b>${o.name}</b><small>${o.blurb}</small></span></span></label>`,
-    ).join('');
+    const range = $('#strengthRange');
+    range.min = STRENGTH.min;
+    range.max = STRENGTH.max;
+    range.step = STRENGTH.step;
+    $('#strengthMin').textContent = STRENGTH.min;
+    $('#strengthMax').textContent = STRENGTH.max;
+    let last = store.get('sk.elo', null);
+    if (last === null) last = STRENGTH.legacy[store.get('sk.level', '')] ?? 1200;
+    range.value = window.EngineTasks.clampElo(last);
+    renderStrength();
     dlg.returnValue = '';
     dlg.showModal();
   }
 
+  function renderStrength() {
+    const range = $('#strengthRange');
+    const elo = +range.value;
+    const band = bandFor(elo);
+    $('#strengthElo').textContent = elo;
+    $('#strengthName').textContent = band.name;
+    $('#strengthBlurb').textContent = band.blurb;
+    $('#strengthPiece').innerHTML = pieceSvg(band.piece, 'b');
+    range.style.setProperty('--fill', `${(100 * (elo - range.min)) / (range.max - range.min)}%`);
+    $('#strengthDown').disabled = elo <= +range.min;
+    $('#strengthUp').disabled = elo >= +range.max;
+  }
+
+  $('#strengthRange').addEventListener('input', renderStrength);
+  for (const [id, dir] of [['#strengthDown', -1], ['#strengthUp', 1]]) {
+    $(id).addEventListener('click', e => {
+      e.preventDefault();
+      const range = $('#strengthRange');
+      range.value = window.EngineTasks.clampElo(+range.value + dir * STRENGTH.step);
+      renderStrength();
+    });
+  }
+  $('#strengthPresets').addEventListener('click', e => {
+    const b = e.target.closest('button[data-elo]');
+    if (!b) return;
+    e.preventDefault();
+    $('#strengthRange').value = window.EngineTasks.clampElo(+b.dataset.elo);
+    renderStrength();
+  });
+
   $('#dlgPve').addEventListener('close', () => {
     const dlg = $('#dlgPve');
     if (dlg.returnValue !== 'ok') return;
-    const level = dlg.querySelector('input[name=level]:checked').value;
+    const elo = window.EngineTasks.clampElo(+$('#strengthRange').value);
     const color = dlg.querySelector('input[name=color]:checked').value;
-    store.set('sk.level', level);
+    store.set('sk.elo', elo);
     location.hash = '#/play';
-    play.start({ mode: 'pve', level, color });
+    play.start({ mode: 'pve', elo, color });
   });
 
   let openGamesUnsub = null;

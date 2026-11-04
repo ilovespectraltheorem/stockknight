@@ -10,13 +10,54 @@ const { createServer, createGameServer } = require('./server.js');
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('play returns a legal move at every level', () => {
-  for (const level of Object.keys(T.LEVELS)) {
-    if (level === 'champion') continue; // 3 s a move; covered by the same code path as knight
-    const r = T.play({ moves: ['b2b3'], level });
-    const pos = T.build(null, ['b2b3']);
-    assert.ok(pos.moveFromUci(r.best), `${level} played ${r.best}`);
+test('play returns a legal move across the Elo range, and for old levels', () => {
+  const pos = T.build(null, ['b2b3']);
+  for (const elo of [T.STRENGTH.min, 800, 1200, 1600, 2000]) {
+    const r = T.play({ moves: ['b2b3'], elo });
+    assert.ok(pos.moveFromUci(r.best), `${elo} played ${r.best}`);
+    assert.equal(r.elo, elo);
   }
+  for (const level of ['page', 'squire', 'knight']) {
+    const r = T.play({ moves: ['b2b3'], level });
+    assert.ok(pos.moveFromUci(r.best), `${level} played ${r.best}`);
+    assert.equal(r.elo, T.clampElo(T.STRENGTH.legacy[level]));
+  }
+});
+
+test('strength settings change smoothly and monotonically with Elo', () => {
+  const S = T.STRENGTH;
+  assert.equal(S.ladder[S.ladder.length - 1].elo, 3000);
+  for (let i = 1; i < S.ladder.length; i++) {
+    const gap = S.ladder[i].elo - S.ladder[i - 1].elo;
+    assert.ok(gap > 0 && gap <= 300, `measured gap L${i - 1}-L${i} is ${gap}`);
+  }
+  let prev = null;
+  for (let elo = S.min; elo <= S.max; elo += S.step) {
+    const s = T.settingFor(elo);
+    if (prev) {
+      assert.ok(s.nodes >= prev.nodes && s.temp <= prev.temp, `${elo} is at least as strong as ${elo - S.step}`);
+    }
+    prev = s;
+  }
+  assert.deepEqual(T.settingFor(3000), { nodes: S.ladder[S.ladder.length - 1].nodes, temp: 0 });
+  assert.equal(T.clampElo(10), S.min);
+  assert.equal(T.clampElo(9999), 3000);
+  assert.equal(T.clampElo(1234), 1250);
+});
+
+test('a temperature spreads choices over good moves and avoids losing ones', () => {
+  // From the start every move is playable: a warm setting varies, a cold one does not.
+  const seen = new Set();
+  let seed = 1;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 40; i++) {
+    const r = T.thinkAt(T.build(null, []), { nodes: 1, temp: 150 }, { random, searcher: new SK.Searcher() });
+    seen.add(r.best);
+  }
+  assert.ok(seen.size >= 4, `warm setting picked ${seen.size} different moves`);
+  const cold = new Set();
+  for (let i = 0; i < 5; i++) cold.add(T.thinkAt(T.build(null, []), { nodes: 3000, temp: 0 }, { random, searcher: new SK.Searcher() }).best);
+  assert.equal(cold.size, 1);
 });
 
 test('analyse scores every legal move and agrees with its best move', () => {
@@ -144,12 +185,12 @@ test('a winning sacrifice is brilliant, the same move without the sacrifice is b
 });
 
 test('a real game reviews end to end', () => {
-  // Page (random-ish) against Knight, a few moves, then analysed and classified.
+  // A weak setting against a stronger one, a few moves, then analysed and classified.
   const moves = [];
   for (let i = 0; i < 12; i++) {
     const pos = T.build(null, moves);
     if (pos.status().state !== 'ongoing') break;
-    moves.push(T.play({ moves, level: i % 2 ? 'page' : 'squire' }).best);
+    moves.push(T.play({ moves, elo: i % 2 ? 600 : 1200 }).best);
   }
   const analyses = [];
   for (let i = 0; i <= moves.length; i++) analyses.push(T.analyse({ moves: moves.slice(0, i), movetime: 60, depth: 5 }));
