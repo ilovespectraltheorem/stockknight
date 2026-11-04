@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const SK = require('../reference/engine.js');
 const T = require('./engine-tasks.js');
 const R = require('./review.js');
-const { createServer } = require('./server.js');
+const { createServer, createGameServer } = require('./server.js');
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -199,9 +199,9 @@ test('artifact rooms: seats, turn order, legality, resignation, open list', asyn
   const bob = globalThis.Online.dbBackend(db, 'bob');
   const carol = globalThis.Online.dbBackend(db, 'carol');
   const tick = () => new Promise(r => setTimeout(r, 5));
-  const id = await alice.create('w');
+  const id = await alice.create({ color: 'w' });
   let open = null;
-  bob.listOpen(rows => (open = rows));
+  bob.lobby(rows => (open = rows.open));
   await tick();
   assert.deepEqual(open.map(r => [r.id, r.open]), [[id, 'b']]);
   await assert.rejects(alice.move(id, 'b2b3'), /opponent/);
@@ -266,6 +266,274 @@ async function serverTest() {
   }
 }
 test('online rooms: joining, turn order, legality, resignation, static files', serverTest);
+
+test('artifact rooms: draw offers, abort and rematch', async () => {
+  const db = fakeDb();
+  const alice = globalThis.Online.dbBackend(db, 'alice');
+  const bob = globalThis.Online.dbBackend(db, 'bob');
+  const tick = () => new Promise(r => setTimeout(r, 5));
+  const id = await alice.create({ color: 'w' });
+  let seen = null;
+  bob.subscribe(id, u => (seen = u), err => assert.fail(err));
+  await tick(); await tick();
+  await assert.rejects(alice.draw(id, 'offer'), /move first/);
+  await alice.move(id, 'b2b3');
+  await bob.move(id, 'c5c4');
+  await alice.draw(id, 'offer');
+  await alice.move(id, 'a2a3');
+  await tick();
+  assert.equal(seen.drawOffer, 'w', 'your own move keeps your offer');
+  await bob.move(id, 'a5a4'); // the opponent moving declines it
+  await tick();
+  assert.equal(seen.drawOffer, null);
+  await bob.draw(id, 'offer');
+  await alice.draw(id, 'accept');
+  await tick();
+  assert.deepEqual(seen.result, { winner: null, reason: 'agreement' });
+  assert.deepEqual(await alice.rematch(id), { next: null });
+  const { next } = await bob.rematch(id);
+  assert.ok(next);
+  let again = null;
+  bob.subscribe(next, u => (again = u), err => assert.fail(err));
+  await tick();
+  assert.equal(again.you, 'w', 'colours swap in the rematch');
+  await bob.abort(next);
+  await tick();
+  assert.equal(again.result.reason, 'aborted');
+});
+
+// --- the game server --------------------------------------------------------------------------
+
+async function withServer(options, fn) {
+  const { server, rooms } = createGameServer(options);
+  server.listen(0);
+  await new Promise(r => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const streams = [];
+  const api = {
+    base,
+    rooms,
+    post: async (path, body = {}) => {
+      const r = await fetch(base + path, { method: 'POST', body: JSON.stringify(body) });
+      return { status: r.status, body: await r.json() };
+    },
+    get: async path => (await fetch(base + path)).json(),
+    // Opens a room's event stream; .last() is the latest state, .next(pred) waits for one.
+    watch: async (id, token = '') => {
+      const ctrl = new AbortController();
+      const res = await fetch(`${base}/api/rooms/${id}/events?token=${token}`, { signal: ctrl.signal });
+      const reader = res.body.getReader();
+      const s = { states: [], you: undefined, waiters: [], close: () => ctrl.abort() };
+      let buf = '';
+      (async () => {
+        try {
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += new TextDecoder().decode(value);
+            let i;
+            while ((i = buf.indexOf('\n\n')) >= 0) {
+              const block = buf.slice(0, i);
+              buf = buf.slice(i + 2);
+              const ev = /event: (\w+)/.exec(block), data = /data: (.*)/.exec(block);
+              if (!ev || !data) continue;
+              const d = JSON.parse(data[1]);
+              if (ev[1] === 'hello') s.you = d.you;
+              else s.states.push(d);
+              s.waiters = s.waiters.filter(w => !(w.pred(d) && (w.resolve(d), true)));
+            }
+          }
+        } catch {
+          /* aborted */
+        }
+      })();
+      s.last = () => s.states[s.states.length - 1];
+      // Each call looks only at states after the one the previous call returned.
+      s.cursor = 0;
+      s.next = pred => {
+        const i = s.states.findIndex((st, j) => j >= s.cursor && pred(st));
+        if (i >= 0) {
+          s.cursor = i + 1;
+          return Promise.resolve(s.states[i]);
+        }
+        return new Promise((resolve, reject) => {
+          s.waiters.push({ pred, resolve: d => ((s.cursor = s.states.length), resolve(d)) });
+          setTimeout(() => reject(new Error('timed out waiting for a state')), 3000);
+        });
+      };
+      streams.push(s);
+      await s.next(() => true);
+      return s;
+    },
+  };
+  try {
+    await fn(api);
+  } finally {
+    for (const s of streams) s.close();
+    server.closeAllConnections();
+    await new Promise(r => server.close(r));
+  }
+}
+
+test('online server: quick pairing matches two players, never you with yourself', () => withServer({}, async api => {
+  const tc = { base: 180, inc: 2 };
+  const a = (await api.post('/api/quick', { tc, name: 'Ann', client: 'clientaaaa' })).body;
+  // An open seek counts only while its player is connected.
+  assert.equal((await api.get('/api/lobby')).open.length, 0);
+  const sa = await api.watch(a.id, a.token);
+  const lob = await api.get('/api/lobby');
+  assert.deepEqual(lob.open.map(g => [g.id, g.name, g.tc.base]), [[a.id, 'Ann', 180]]);
+  const self = (await api.post('/api/quick', { tc, client: 'clientaaaa' })).body;
+  assert.notEqual(self.id, a.id, 'a second tab of the same browser waits instead of pairing with itself');
+  const other = (await api.post('/api/quick', { tc: { base: 60, inc: 0 }, client: 'clientcccc' })).body;
+  assert.notEqual(other.id, a.id, 'a different time control waits too');
+  const b = (await api.post('/api/quick', { tc, name: '<Bo>', client: 'clientbbbb' })).body;
+  assert.equal(b.id, a.id);
+  assert.notEqual(b.color, a.color);
+  const st = await sa.next(s => s.players.w && s.players.b);
+  assert.equal(st.names[b.color], 'Bo', 'names are cleaned');
+  assert.deepEqual(st.tc, tc);
+}));
+
+test('online server: clocks, increments, first-move abort and flagging', async () => {
+  let t = 1_000_000;
+  await withServer({ now: () => t, firstMoveMs: 30000 }, async api => {
+    const a = (await api.post('/api/rooms', { color: 'w', tc: { base: 60, inc: 2 } })).body;
+    const b = (await api.post(`/api/rooms/${a.id}/join`, {})).body;
+    const mv = (tok, uci, ply) => api.post(`/api/rooms/${a.id}/move`, { token: tok, uci, ply });
+    let st = await api.get(`/api/rooms/${a.id}`);
+    assert.equal(st.clock.running, null, 'clocks wait for both first moves');
+    assert.equal(st.firstMove.side, 'w');
+    t += 20000;
+    assert.equal((await mv(a.token, 'b2b3', 0)).status, 200);
+    assert.equal((await mv(b.token, 'c5c4', 0)).status, 409, 'a stale ply is refused');
+    t += 5000;
+    assert.equal((await mv(b.token, 'c5c4', 1)).status, 200);
+    st = await api.get(`/api/rooms/${a.id}`);
+    assert.equal(st.clock.running, 'w');
+    assert.equal(st.clock.w, 60000, 'first moves cost no time');
+    assert.equal(st.clock.b, 60000);
+    t += 10000;
+    assert.equal((await mv(a.token, 'a2a3', 2)).status, 200);
+    st = await api.get(`/api/rooms/${a.id}`);
+    assert.equal(st.clock.w, 52000, '10 s used, 2 s increment');
+    t += 61000; // Black's minute runs out
+    const r = await mv(b.token, 'a5a4', 3);
+    assert.equal(r.status, 409);
+    st = await api.get(`/api/rooms/${a.id}`);
+    assert.deepEqual(st.result, { winner: 'w', reason: 'timeout' });
+    assert.equal(st.clock.b, 0);
+
+    // A side that never makes its first move aborts the game.
+    const c = (await api.post('/api/rooms', { color: 'w', tc: { base: 60, inc: 0 } })).body;
+    const d = (await api.post(`/api/rooms/${c.id}/join`, {})).body;
+    t += 31000;
+    assert.equal((await api.post(`/api/rooms/${c.id}/move`, { token: c.token, uci: 'b2b3' })).status, 409);
+    st = await api.get(`/api/rooms/${c.id}`);
+    assert.equal(st.result.reason, 'aborted');
+    assert.ok(d.token);
+  });
+});
+
+test('online server: draw offers, abort, resign and rematch', () => withServer({}, async api => {
+  const a = (await api.post('/api/rooms', { color: 'w' })).body;
+  const b = (await api.post(`/api/rooms/${a.id}/join`, {})).body;
+  const act = (tok, action, extra = {}) => api.post(`/api/rooms/${a.id}/${action}`, { token: tok, ...extra });
+  assert.equal((await act(a.token, 'draw', { answer: 'offer' })).status, 409, 'no draw offer before moving');
+  await act(a.token, 'move', { uci: 'b2b3' });
+  await act(b.token, 'move', { uci: 'c5c4' });
+  assert.equal((await act(a.token, 'abort')).status, 409, 'too late to abort');
+  assert.equal((await act(a.token, 'draw', { answer: 'offer' })).status, 200);
+  let st = await api.get(`/api/rooms/${a.id}`);
+  assert.equal(st.drawOffer, 'w');
+  assert.equal((await act(b.token, 'draw', { answer: 'decline' })).status, 200);
+  assert.equal((await api.get(`/api/rooms/${a.id}`)).drawOffer, null);
+  assert.equal((await act(a.token, 'draw', { answer: 'accept' })).status, 409, 'nothing to accept');
+  await act(a.token, 'draw', { answer: 'offer' });
+  await act(a.token, 'move', { uci: 'a2a3' });
+  assert.equal((await api.get(`/api/rooms/${a.id}`)).drawOffer, 'w', 'moving does not withdraw your own offer');
+  await act(b.token, 'move', { uci: 'a5a4' });
+  assert.equal((await api.get(`/api/rooms/${a.id}`)).drawOffer, null, 'the opponent moving declines it');
+  await act(b.token, 'draw', { answer: 'offer' });
+  await act(a.token, 'draw', { answer: 'accept' });
+  st = await api.get(`/api/rooms/${a.id}`);
+  assert.deepEqual(st.result, { winner: null, reason: 'agreement' });
+
+  assert.equal((await act(a.token, 'rematch')).body.next, null);
+  const next = (await act(b.token, 'rematch')).body.next;
+  assert.ok(next);
+  assert.equal((await api.get(`/api/rooms/${a.id}`)).next, next);
+  // Same tokens, colours swapped: the old Black moves first.
+  assert.equal((await api.post(`/api/rooms/${next}/move`, { token: b.token, uci: 'b2b3' })).status, 200);
+  assert.equal((await api.post(`/api/rooms/${next}/resign`, { token: a.token })).status, 200, 'resigning before your first move aborts');
+  assert.equal((await api.get(`/api/rooms/${next}`)).result.reason, 'aborted');
+
+  // Resigning a real game.
+  const c = (await api.post('/api/rooms', { color: 'b' })).body;
+  const d = (await api.post(`/api/rooms/${c.id}/join`, {})).body;
+  await api.post(`/api/rooms/${c.id}/move`, { token: d.token, uci: 'b2b3' });
+  await api.post(`/api/rooms/${c.id}/move`, { token: c.token, uci: 'c5c4' });
+  await api.post(`/api/rooms/${c.id}/resign`, { token: d.token });
+  assert.deepEqual((await api.get(`/api/rooms/${c.id}`)).result, { winner: 'b', reason: 'resignation' });
+}));
+
+test('online server: presence, reconnecting, claiming an abandoned game', async () => {
+  let t = 5_000_000;
+  await withServer({ now: () => t, claimMs: 60000 }, async api => {
+    const a = (await api.post('/api/rooms', { color: 'w' })).body;
+    const b = (await api.post(`/api/rooms/${a.id}/join`, {})).body;
+    const sa = await api.watch(a.id, a.token);
+    let sb = await api.watch(a.id, b.token);
+    assert.equal(sa.you, 'w');
+    assert.equal(sb.you, 'b');
+    const viewer = await api.watch(a.id);
+    assert.equal(viewer.you, null);
+    await sa.next(s => s.watchers === 1);
+    await api.post(`/api/rooms/${a.id}/move`, { token: a.token, uci: 'b2b3' });
+    await api.post(`/api/rooms/${a.id}/move`, { token: b.token, uci: 'c5c4' });
+    assert.equal((await api.post(`/api/rooms/${a.id}/claim`, { token: a.token })).status, 409, 'the opponent is here');
+    sb.close();
+    let st = await sa.next(s => !s.online.b);
+    assert.equal(st.gone.b, 60000);
+    // Back within the minute: the stream starts with the full game.
+    sb = await api.watch(a.id, b.token);
+    assert.deepEqual(sb.last().moves, ['b2b3', 'c5c4']);
+    await sa.next(s => s.online.b && s.gone.b === null);
+    sb.close();
+    await sa.next(s => !s.online.b);
+    t += 30000;
+    assert.equal((await api.post(`/api/rooms/${a.id}/claim`, { token: a.token })).status, 409, 'too soon');
+    t += 31000;
+    const claim = await api.post(`/api/rooms/${a.id}/claim`, { token: a.token });
+    assert.equal(claim.status, 200, JSON.stringify(claim.body));
+    st = await api.get(`/api/rooms/${a.id}`);
+    assert.deepEqual(st.result, { winner: 'w', reason: 'abandonment' });
+  });
+});
+
+test('online server: games survive a restart with --data', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maki-'));
+  const dataFile = path.join(dir, 'rooms.json');
+  let a, b;
+  await withServer({ dataFile }, async api => {
+    a = (await api.post('/api/rooms', { color: 'w', tc: { base: 300, inc: 0 }, name: 'Ann' })).body;
+    b = (await api.post(`/api/rooms/${a.id}/join`, {})).body;
+    await api.post(`/api/rooms/${a.id}/move`, { token: a.token, uci: 'b2b3' });
+    await api.post(`/api/rooms/${a.id}/move`, { token: b.token, uci: 'c5c4' });
+  });
+  assert.ok(fs.existsSync(dataFile));
+  await withServer({ dataFile }, async api => {
+    const st = await api.get(`/api/rooms/${a.id}`);
+    assert.deepEqual(st.moves, ['b2b3', 'c5c4']);
+    assert.equal(st.names.w, 'Ann');
+    assert.ok(st.clock.w > 299000 && st.clock.w <= 300000);
+    assert.equal((await api.post(`/api/rooms/${a.id}/move`, { token: a.token, uci: 'a2a3' })).status, 200, 'tokens still work');
+  });
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 (async () => {
   let failed = 0;

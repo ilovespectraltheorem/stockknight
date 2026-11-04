@@ -65,12 +65,23 @@
 
   function resultText(result) {
     if (!result) return '';
-    if (!result.winner) return result.reason === 'bare kings' ? 'Draw: bare kings' : 'Draw by repetition';
+    if (!result.winner) {
+      return {
+        'bare kings': 'Draw: bare kings',
+        threefold: 'Draw by repetition',
+        agreement: 'Draw by agreement',
+        aborted: 'Game aborted',
+        'timeout vs insufficient material': 'Draw: out of time, but the opponent had only a king left',
+        'abandonment vs insufficient material': 'Draw: a player left, but the other had only a king left',
+      }[result.reason] || 'Draw';
+    }
     const who = result.winner === 'w' ? 'White' : 'Black';
     const how = {
       checkmate: 'by checkmate',
       stalemate: 'by stalemate (no legal move loses)',
       resignation: 'by resignation',
+      timeout: 'on time',
+      abandonment: 'as the opponent left the game',
     }[result.reason] || '';
     return `${who} wins ${how}`.trim();
   }
@@ -79,6 +90,32 @@
     if (st.state === 'win') return { winner: colorKey(st.winner), reason: st.reason };
     if (st.state === 'draw') return { winner: null, reason: st.reason };
     return null;
+  }
+
+  // Online time controls: { base, inc } in seconds, or null for untimed.
+  function parseTc(v) {
+    const m = /^(\d+)\+(\d+)$/.exec(v || '');
+    return m ? { base: +m[1], inc: +m[2] } : null;
+  }
+
+  function tcLabel(tc) {
+    if (!tc) return 'Untimed';
+    const base = tc.base % 60 ? `${tc.base} s` : `${tc.base / 60} min`;
+    return tc.inc ? `${tc.base % 60 ? tc.base + ' s' : tc.base / 60} | ${tc.inc}` : base;
+  }
+
+  function fmtClock(ms) {
+    if (ms === null || ms === undefined) return '';
+    if (ms < 10000) return `0:0${(Math.floor(ms / 100) / 10).toFixed(1)}`;
+    const s = Math.ceil(ms / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+  }
+
+  function chosenTc() {
+    if (!backend || !backend.features.clocks) return null;
+    const el = document.querySelector('#tcSeg input[name=tc]:checked');
+    return parseTc(el ? el.value : '');
   }
 
   // --- engine client (Web Worker, or the page itself when workers are unavailable) --------
@@ -468,6 +505,15 @@
       this.start({ mode: 'local' });
     },
 
+    // "Play again" after a result: a rematch online, otherwise a new game.
+    playAgain() {
+      const o = this.online;
+      if (this.game && this.game.mode === 'online' && o && o.color !== null && o.st && o.st.players.w && o.st.players.b && o.st.result && o.st.result.reason !== 'aborted') {
+        return this.onlineAction('rematch');
+      }
+      this.again();
+    },
+
     isHuman(color) {
       const g = this.game;
       if (g.mode === 'local') return true;
@@ -567,8 +613,8 @@
       if (!g || g.result) return;
       if (g.mode === 'online') {
         if (!this.online || this.online.color === null) return;
-        if (!this.confirmResign()) return;
-        backend.resign(this.online.id).catch(err => toast(err.message));
+        if (this.resignLabel() === 'Resign' && !this.confirmResign()) return;
+        this.onlineAction('resign');
         return;
       }
       const loser = g.mode === 'pve' ? g.humanColor : this.pos.side;
@@ -587,13 +633,13 @@
       if (this.resignArmed) {
         clearTimeout(this.resignArmed);
         this.resignArmed = 0;
-        b.textContent = 'Resign';
+        b.textContent = this.resignLabel();
         return true;
       }
       b.textContent = 'Click again to resign';
       this.resignArmed = setTimeout(() => {
         this.resignArmed = 0;
-        b.textContent = 'Resign';
+        b.textContent = this.resignLabel();
       }, 3000);
       return false;
     },
@@ -601,7 +647,7 @@
     finish(result) {
       const g = this.game;
       g.result = result;
-      if (g.moves.length) saveGame({ ...g, moves: g.moves.slice() });
+      if (g.moves.length && result.reason !== 'aborted') saveGame({ ...g, moves: g.moves.slice() });
       setTimeout(() => showResult(g), 350);
     },
 
@@ -627,6 +673,8 @@
       $('#btnEval').classList.toggle('primary', this.showEval);
       $('#btnUndo').disabled = g.mode === 'online' || !g.moves.length;
       $('#btnResign').disabled = !!g.result || (g.mode === 'online' && !(this.online && this.online.color !== null));
+      this.renderOnline();
+      if (g.mode === 'online') this.tickOnline();
     },
 
     lastMoveCode() {
@@ -649,9 +697,17 @@
       const name = color === WHITE ? g.white : g.black;
       let sub = name === colorName(color) ? '' : colorName(color);
       if (g.mode === 'local') sub = 'Pass and play';
-      if (g.mode === 'online' && this.online) {
-        const here = this.online.players[colorKey(color)];
-        if (this.online.color !== color && !here) sub += ' · waiting to join';
+      let clock = '';
+      if (g.mode === 'online' && this.online && this.online.st) {
+        const st = this.online.st;
+        const k = colorKey(color);
+        sub = colorName(color);
+        if (st.players[k] && st.online) sub = `<span class="presence${st.online[k] ? '' : ' off'}" title="${st.online[k] ? 'Connected' : 'Not connected'}"></span>${sub}${st.online[k] ? '' : ' · away'}`;
+        if (!st.players[k]) sub += ' · waiting to join';
+        if (st.clock) {
+          const run = st.clock.running === k && !g.result;
+          clock = `<div class="clock${run ? ' run' : ''}" data-clock="${k}">${fmtClock(this.clockLeft(k))}</div>`;
+        }
       }
       const thinking = this.thinking && this.pos.side === color ? '<span class="thinking"><i></i><i></i><i></i></span>' : '';
       const mine = this.movableColor() === color;
@@ -668,7 +724,7 @@
       const avatarPiece = name.includes('Stockhorse') ? OPPONENTS.find(o => name.startsWith(o.name))?.piece || 'N' : 'N';
       return `<div class="avatar">${pieceSvg(avatarPiece, colorKey(color))}</div>
         <div><div class="pname">${esc(name)}${thinking}</div><div class="psub">${sub}</div></div>
-        <div class="reserve">${res}</div>`;
+        <div class="reserve">${res}</div>${clock}`;
     },
 
     renderMoves() {
@@ -695,8 +751,11 @@
         main = resultText(g.result);
         sub = 'Review the game to see where it was won and lost.';
       } else if (g.mode === 'online' && this.online && (!this.online.players.w || !this.online.players.b)) {
-        main = 'Waiting for your opponent';
-        sub = 'Share the details below with your friend.';
+        const st = this.online.st;
+        main = st && st.public ? 'Looking for an opponent…' : 'Waiting for your opponent';
+        sub = st && st.public
+          ? `The next player to pick Quick pairing at ${tcLabel(st.tc)} joins you. A friend can also use the link below.`
+          : `${tcLabel(st && st.tc)}. Share the details below with your friend.`;
       } else {
         const side = colorName(this.pos.side);
         main = this.thinking ? `${side === 'White' ? g.white : g.black} is thinking` : `${side} to move`;
@@ -711,10 +770,19 @@
 
     async createRoom(color) {
       try {
-        const id = await backend.create(color);
+        const id = await backend.create({ color, tc: chosenTc(), name: store.get('sk.name', '') });
         location.hash = `#/online/${id}`;
       } catch (err) {
         toast(`Could not make a game: ${err.message}`);
+      }
+    },
+
+    async quickPair() {
+      try {
+        const id = await backend.quick({ tc: chosenTc(), name: store.get('sk.name', '') });
+        location.hash = `#/online/${id}`;
+      } catch (err) {
+        toast(`Could not find a game: ${err.message}`);
       }
     },
 
@@ -729,14 +797,15 @@
       engine.reset();
       this.token++;
       this.thinking = false;
-      this.online = { id, color: null, players: { w: false, b: false }, unsubscribe: null };
+      this.dropSel = null;
+      this.online = { id, color: null, players: { w: false, b: false }, st: null, recvAt: 0, conn: true, sawNext: null, unsubscribe: null };
       this.game = { id: `room-${id}`, mode: 'online', startFen: START_FEN, moves: [], white: 'White', black: 'Black', result: null, date: Date.now() };
       this.pos = new Position(START_FEN);
       if (backend.kind === 'server') {
         $('#shareText').textContent = 'Send this link to your opponent:';
         $('#shareLink').value = `${location.origin}${location.pathname}#/online/${id}`;
       } else {
-        $('#shareText').textContent = 'Your friend opens this page, chooses Play a friend online and joins this game from the list, or types its code:';
+        $('#shareText').textContent = 'Your friend opens this page, chooses Play online and joins this game from the list, or types its code:';
         $('#shareLink').value = id;
       }
       const o = this.online;
@@ -745,11 +814,9 @@
         st => {
           if (this.online !== o) return;
           const you = st.you === 'w' ? WHITE : st.you === 'b' ? BLACK : null;
-          if (you !== o.color || this.game.white === 'White') {
+          if (you !== o.color || !o.st) {
             o.color = you;
             this.flipped = you === BLACK;
-            this.game.white = you === WHITE ? 'You' : you === null ? 'Player' : 'Opponent';
-            this.game.black = you === BLACK ? 'You' : you === null ? 'Player' : 'Opponent';
           }
           this.syncRoom(st);
         },
@@ -757,15 +824,40 @@
           toast(err.message);
           if (this.online === o) location.hash = '#/';
         },
+        up => {
+          if (this.online !== o || o.conn === up) return;
+          o.conn = up;
+          this.renderOnline();
+        },
       );
+      clearInterval(this.clockTimer);
+      this.clockTimer = setInterval(() => this.tickOnline(), 100);
       this.render();
+    },
+
+    // The name shown for a seat: the player's chosen name, or a stand-in.
+    seatName(k, st) {
+      const mine = this.online && this.online.color !== null && colorKey(this.online.color) === k;
+      const n = st.names && st.names[k];
+      if (n) return mine ? `${n} (you)` : n;
+      if (mine) return 'You';
+      return st.players[k] ? (this.online.color === null ? colorName(k === 'w' ? WHITE : BLACK) : 'Opponent') : 'Waiting…';
     },
 
     syncRoom(st) {
       const g = this.game;
-      if (!this.online || g.mode !== 'online') return;
-      this.online.players = st.players;
+      const o = this.online;
+      if (!o || g.mode !== 'online') return;
+      if (o.sawNext === null) o.sawNext = !!st.next; // a game opened after its rematch began does not jump ahead
+      o.st = st;
+      o.recvAt = Date.now();
+      o.players = st.players;
+      o.conn = true;
+      g.white = this.seatName('w', st);
+      g.black = this.seatName('b', st);
+      g.tc = st.tc || null;
       const same = st.moves.length >= g.moves.length && g.moves.every((u, i) => st.moves[i] === u);
+      const before = g.moves.length;
       if (same) {
         for (const u of st.moves.slice(g.moves.length)) {
           this.pos.makeMove(this.pos.moveFromUci(u));
@@ -774,33 +866,163 @@
       } else {
         g.moves = st.moves.slice();
         this.pos = buildPosition(g.startFen, g.moves);
+        this.dropSel = null;
       }
-      $('#sharePanel').hidden = !!(st.players.w && st.players.b);
+      if (g.moves.length !== before) this.dropSel = null;
+      $('#sharePanel').hidden = !!(st.players.w && st.players.b) || !!st.result;
       if (st.result && !g.result) this.finish(st.result);
       this.render();
       if (this.showEval) this.updateEval();
+      if (st.next && !o.sawNext && o.color !== null) {
+        o.sawNext = true;
+        toast('Rematch! Colours swap.');
+        $('#dlgResult').open && $('#dlgResult').close();
+        location.hash = `#/online/${st.next}`;
+      }
+    },
+
+    // Time left on a side's clock right now, in ms, counting down from the last update.
+    clockLeft(k) {
+      const st = this.online && this.online.st;
+      if (!st || !st.clock) return null;
+      let ms = st.clock[k];
+      if (st.clock.running === k && !this.game.result) ms -= Date.now() - this.online.recvAt;
+      return Math.max(0, ms);
+    },
+
+    tickOnline() {
+      const o = this.online;
+      if (!o || !o.st) return;
+      for (const el of $$('.clock[data-clock]')) {
+        const k = el.dataset.clock;
+        const ms = this.clockLeft(k);
+        el.textContent = fmtClock(ms);
+        el.classList.toggle('low', ms < 20000 && !!o.st.clock);
+      }
+      // Countdowns in words change once a second.
+      const sec = Math.floor(Date.now() / 1000);
+      if (sec !== this.lastSec) {
+        this.lastSec = sec;
+        this.renderOnline();
+      }
     },
 
     async onlineMove(uci) {
       const o = this.online;
       // Show the move at once; the next room update confirms or corrects it.
       const before = this.game.moves.slice();
+      const ply = before.length;
       this.applyMove(uci);
       try {
-        await backend.move(o.id, uci);
+        await backend.move(o.id, uci, ply);
       } catch (err) {
         if (this.online !== o) return;
         toast(err.message || 'Move refused');
         this.game.moves = before;
         this.game.result = null;
         this.pos = buildPosition(this.game.startFen, before);
-        this.render();
+        if (o.st) this.syncRoom(o.st);
+        else this.render();
       }
+    },
+
+    async onlineAction(name, ...args) {
+      const o = this.online;
+      if (!o) return;
+      try {
+        await backend[name](o.id, ...args);
+      } catch (err) {
+        if (this.online === o) toast(err.message);
+      }
+    },
+
+    // The online panel: what is going on beyond the board, and the buttons for it.
+    renderOnline() {
+      const o = this.online;
+      const box = $('#onlineBox');
+      if (!o || !this.game || this.game.mode !== 'online' || !o.st) {
+        box.hidden = true;
+        return;
+      }
+      const st = o.st;
+      const me = o.color === null ? null : colorKey(o.color);
+      const opp = me && (me === 'w' ? 'b' : 'w');
+      const seatedBoth = st.players.w && st.players.b;
+      const info = [];
+      let warn = false;
+      const buttons = [];
+      if (!o.conn) {
+        info.push('Connection lost. Reconnecting…');
+        warn = true;
+      }
+      if (!st.result && seatedBoth) {
+        if (st.firstMove) {
+          const who = me === st.firstMove.side ? 'You have' : `${st.firstMove.side === 'w' ? 'White' : 'Black'} has`;
+          const left = Math.max(0, Math.ceil((st.firstMove.left - (Date.now() - o.recvAt)) / 1000));
+          info.push(`${who} ${left} s to make the first move, or the game is aborted.`);
+        }
+        if (opp && st.gone && st.gone[opp] !== null) {
+          const left = Math.max(0, Math.ceil((st.gone[opp] - (Date.now() - o.recvAt)) / 1000));
+          if (left > 0) info.push(`Your opponent left the game. You can claim the win in ${left} s if they do not come back.`);
+          else {
+            info.push('Your opponent left the game.');
+            buttons.push('<button class="btn primary" data-oa="claim">Claim the win</button>');
+          }
+          warn = true;
+        }
+        if (me && st.drawOffer === opp) {
+          info.push('Your opponent offers a draw.');
+          buttons.push('<button class="btn primary" data-oa="accept">Accept draw</button>', '<button class="btn" data-oa="decline">Decline</button>');
+        } else if (me && st.drawOffer === me) {
+          info.push('You offered a draw.');
+        } else if (me && this.game.moves.length >= 2) {
+          buttons.push('<button class="btn" data-oa="offer">½ Offer draw</button>');
+        }
+      }
+      if (st.result && me && seatedBoth && !st.next) {
+        if (st.rematch && st.rematch[opp]) {
+          info.push('Your opponent wants a rematch.');
+          buttons.push('<button class="btn primary" data-oa="rematch">Accept rematch</button>');
+        } else if (st.rematch && st.rematch[me]) {
+          info.push('Rematch offered. Waiting for your opponent…');
+        } else {
+          buttons.push('<button class="btn primary" data-oa="rematch">Rematch</button>');
+        }
+      }
+      if (st.result && st.next && (me === null || o.sawNext)) {
+        buttons.push(`<button class="btn" data-oa="next">${me ? 'Go to the rematch' : 'Watch the rematch'}</button>`);
+      }
+      if (st.watchers) info.push(`${st.watchers} watching.`);
+      const infoEl = $('#onlineInfo');
+      infoEl.hidden = !info.length;
+      infoEl.classList.toggle('warn', warn);
+      infoEl.textContent = info.join(' ');
+      const html = buttons.join('');
+      if ($('#onlineActions').innerHTML !== html) $('#onlineActions').innerHTML = html;
+      $('#onlineActions').hidden = !buttons.length;
+      box.hidden = !info.length && !buttons.length;
+      if (!st.result) {
+        const label = this.resignLabel();
+        if (!this.resignArmed && $('#btnResign').textContent !== label) $('#btnResign').textContent = label;
+      }
+    },
+
+    resignLabel() {
+      const g = this.game;
+      if (g && g.mode === 'online' && this.online && this.online.st && !g.result) {
+        const st = this.online.st;
+        if (!(st.players.w && st.players.b)) return 'Cancel game';
+        if (g.moves.length < 2) return 'Abort';
+      }
+      return 'Resign';
     },
 
     leaveOnline() {
       if (this.online && this.online.unsubscribe) this.online.unsubscribe();
       this.online = null;
+      clearInterval(this.clockTimer);
+      $('#onlineBox').hidden = true;
+      $('#btnResign').textContent = 'Resign';
     },
   };
 
@@ -813,13 +1035,16 @@
     let me = null;
     if (g.mode === 'pve') me = g.humanColor;
     if (g.mode === 'online' && play.online) me = play.online.color;
-    if (!r.winner) title = 'Draw';
+    if (r.reason === 'aborted') title = 'Game aborted';
+    else if (!r.winner) title = 'Draw';
     else if (me === null) title = `${r.winner === 'w' ? 'White' : 'Black'} wins`;
     else title = colorKey(me) === r.winner ? 'You win' : 'You lose';
     $('#resultTitle').textContent = title;
     $('#resultText').textContent = `${resultText(r)} after ${Math.ceil(g.moves.length / 2)} move${g.moves.length > 2 ? 's' : ''}.`;
     const mark = r.winner ? (r.winner === 'w' ? pieceSvg('N', 'w') : pieceSvg('N', 'b')) : pieceSvg('K', 'w');
     $('#resultMark').innerHTML = mark;
+    const rematch = g.mode === 'online' && play.online && play.online.color !== null && r.reason !== 'aborted';
+    $('#resultAgain').textContent = rematch ? 'Rematch' : 'Play again';
     const dlg = $('#dlgResult');
     dlg.returnValue = '';
     dlg.showModal();
@@ -828,7 +1053,7 @@
   $('#dlgResult').addEventListener('close', () => {
     const v = $('#dlgResult').returnValue;
     if (v === 'review') play.reviewThis();
-    if (v === 'again') play.again();
+    if (v === 'again') play.playAgain();
   });
 
   // --- review controller ------------------------------------------------------------------
@@ -1176,13 +1401,29 @@
     const dlg = $('#dlgOnline');
     dlg.returnValue = '';
     $('#joinCode').value = '';
-    $('#openGamesWrap').hidden = !(backend && backend.listOpen);
-    if (backend && backend.listOpen && !openGamesUnsub) {
-      openGamesUnsub = backend.listOpen(rows => {
-        $('#openGames').innerHTML = rows.length
-          ? rows.map(r => `<li><button type="button" class="btn" data-join="${esc(r.id)}">${r.mine ? 'Back to your game' : `Play as ${r.open === 'w' ? 'White' : 'Black'}`}
-              <span class="muted">· ${esc(r.id)} · ${r.moves} move${r.moves === 1 ? '' : 's'}</span></button></li>`).join('')
-          : '<li class="muted">No open games yet. Make one and your friend will see it here.</li>';
+    $('#onlineName').value = store.get('sk.name', '');
+    const f = (backend && backend.features) || {};
+    $('#tcWrap').hidden = !f.clocks;
+    $('#quickWrap').hidden = !f.quick;
+    const lastTc = store.get('sk.tc', '300+0');
+    const tcInput = $$('#tcSeg input').find(i => i.value === lastTc);
+    if (tcInput) tcInput.checked = true;
+    $('#openGamesWrap').hidden = !f.lobby;
+    $('#liveGamesWrap').hidden = true;
+    if (f.lobby && !openGamesUnsub) {
+      openGamesUnsub = backend.lobby(({ open, live }) => {
+        const by = r => (r.name ? ` · ${esc(r.name)}` : '');
+        const tc = r => (backend.features.clocks ? ` · ${esc(tcLabel(r.tc))}` : '');
+        $('#openGames').innerHTML = open.length
+          ? open.map(r => `<li><button type="button" class="btn" data-join="${esc(r.id)}">${r.mine ? 'Back to your game' : `Play as ${r.open === 'w' ? 'White' : 'Black'}`}
+              <span class="muted">${tc(r)}${by(r)} · ${esc(r.id)}</span></button></li>`).join('')
+          : '<li class="muted">No open challenges right now. Use Quick pairing and others will see yours here.</li>';
+        $('#liveGamesWrap').hidden = !live.length;
+        $('#liveGames').innerHTML = live.map(r => {
+          const names = `${esc((r.names && r.names.w) || 'White')} vs ${esc((r.names && r.names.b) || 'Black')}`;
+          return `<li><button type="button" class="btn" data-join="${esc(r.id)}">${r.mine ? 'Back to your game: ' : ''}${names}
+            <span class="muted">${tc(r)} · move ${Math.ceil((r.moves + 1) / 2)}${r.watchers ? ` · ${r.watchers} watching` : ''}</span></button></li>`;
+        }).join('');
       });
     }
     dlg.showModal();
@@ -1200,14 +1441,28 @@
     const dlg = $('#dlgOnline');
     if (openGamesUnsub) openGamesUnsub();
     openGamesUnsub = null;
+    store.set('sk.name', $('#onlineName').value.trim().slice(0, 24));
+    const tcEl = $('#tcSeg input[name=tc]:checked');
+    if (tcEl) store.set('sk.tc', tcEl.value);
     if (dlg.returnValue === 'code') {
       const code = $('#joinCode').value.trim().toLowerCase();
       if (/^[a-z0-9]{4,12}$/.test(code)) location.hash = `#/online/${code}`;
       else if (code) toast('That code does not look right');
       return;
     }
+    if (dlg.returnValue === 'quick') return play.quickPair();
     if (dlg.returnValue !== 'ok') return;
     play.createRoom(dlg.querySelector('input[name=ocolor]:checked').value);
+  });
+
+  $('#onlineActions').addEventListener('click', e => {
+    const b = e.target.closest('[data-oa]');
+    if (!b) return;
+    const a = b.dataset.oa;
+    if (a === 'offer' || a === 'accept' || a === 'decline') play.onlineAction('draw', a);
+    else if (a === 'claim') play.onlineAction('claim');
+    else if (a === 'rematch') play.onlineAction('rematch');
+    else if (a === 'next' && play.online && play.online.st.next) location.hash = `#/online/${play.online.st.next}`;
   });
 
   // --- routing ----------------------------------------------------------------------------
@@ -1316,7 +1571,7 @@
           ? 'Sign in to claude.ai, and ask the owner for access that lets you interact with this page.'
           : 'Needs the Maki server: run node web/server.js and open the page it prints.';
       } else if (b.kind === 'db') {
-        $('#onlineSub').textContent = 'Make a game, and your friend joins it from this same page.';
+        $('#onlineSub').textContent = 'Make a game, and your friend joins it from this same page. Draw offers and rematches; no clocks here.';
       }
       if (pendingOnline) route();
     });

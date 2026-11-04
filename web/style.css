@@ -386,3 +386,27 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
   .opponents { grid-template-columns: 1fr; }
   main { padding-top: 16px; }
 }
+
+/* Online play */
+.clock {
+  margin-left: 8px; flex: none; min-width: 74px; padding: 6px 10px; border-radius: 8px; text-align: right;
+  font: 700 20px/1 var(--font); font-variant-numeric: tabular-nums; background: var(--surface-2); color: var(--muted);
+  border: 1px solid var(--line);
+}
+.clock.run { background: var(--text); color: var(--bg); border-color: var(--text); }
+.clock.low { color: var(--danger); }
+.clock.run.low { background: var(--danger); color: #fff; border-color: var(--danger); }
+.presence { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: #5f9e3a; }
+.presence.off { background: var(--muted); opacity: 0.6; }
+.online-box { display: grid; gap: 8px; }
+.online-info { margin: 0; font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); }
+.online-info.warn { background: rgb(179 58 46 / 0.12); color: var(--danger); }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.field input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 15px; }
+.seg.wrap { display: flex; flex-wrap: wrap; }
+.seg.wrap span { padding: 7px 12px; }
+.quick-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.quick-row .muted { font-size: 13px; }
+@media (max-width: 520px) {
+  .clock { min-width: 60px; font-size: 16px; padding: 5px 7px; }
+}

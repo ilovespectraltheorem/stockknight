@@ -8,6 +8,7 @@ the engines play. No build step and no dependencies.
 
 ```sh
 node web/server.js            # http://localhost:8080/  (all features, including online games)
+node web/server.js --data rooms.json   # the same, keeping games across restarts
 python3 -m http.server        # from the repo root, then open /web/  (everything but online games)
 node web/test.js              # engine tasks, review classification, online server
 ```
@@ -18,10 +19,36 @@ node web/test.js              # engine tasks, review classification, online serv
 |---|---|
 | Play the engine | Four opponents. Page (depth 1, wide random margin), Squire, Knight and Champion are the reference engine's `casual`, `club` and `strong` levels. The engine runs in a Web Worker |
 | Pass and play | Both sides on one screen; the board turns to the side to move |
-| Online | `web/server.js` holds rooms in memory. A room link seats the second visitor; later visitors watch. Every move is checked with the reference engine on the server, and state reaches both browsers over server-sent events |
+| Online | See [Online play](#online-play) below |
 | Moving | Click or drag a piece. To drop, click a piece in your reserve (beside the board), then a highlighted square. A reserve piece is only clickable when it has a legal drop |
 | Game review | Every position is searched with a full window for every legal move, so each played move has an exact score at the same depth as the best move. Review time per position: Quick 0.25 s, Standard 0.7 s, Deep 1.8 s |
 | Saved games | The last 40 finished or reviewed games are kept in the browser (`localStorage`). Move lists can be copied and pasted back in for review |
+
+## Online play
+
+`web/server.js` is the referee. Browsers send moves; the server checks each one with the
+reference engine, runs the clocks and decides every result, then pushes the new state to both
+players and any watchers over server-sent events.
+
+| Feature | How it works |
+|---|---|
+| Quick pairing | Pick a time control and press Quick pairing. You join the oldest waiting player at the same time control, or you wait and your game shows under Open challenges for others. A waiting game only counts while its player is connected, and two tabs of the same browser are never paired together |
+| Invite link | Make an invite link (pick White, Black or random) and send it. The first visitor takes the free seat; anyone after that watches |
+| Lobby | The online dialog lists open challenges and live games to watch, refreshed every 3 s |
+| Time controls | 1 min, 3 \| 2, 5 min, 10 \| 5, 15 \| 10 or untimed. Clocks start after both sides have made their first move; each side has 30 s for its first move or the game is aborted. The increment is added after every timed move. Running out of time loses, unless the opponent has only a king and an empty reserve, which is a draw |
+| Draws | Offer a draw after your first move. Your opponent accepts or declines; making a move also declines it. Repetition and bare kings end the game as usual |
+| Abort and resign | Before both sides have moved, the button reads Abort and ends the game with no result. After that it is Resign (click twice) |
+| Reconnecting | Each browser keeps its seat token in `localStorage`, so a reload or a dropped connection rejoins the same seat and gets the full game back. The player bars show who is connected. If a player has been gone for 60 s, the opponent may claim the win (or abort, if the game had not really started). Clocks keep running while a player is away |
+| Rematch | After a game either player asks for a rematch; when both have, a new game with colours swapped opens for both |
+| Restarts | With `--data FILE` (or `MAKI_DATA`) the server saves games to a JSON file and reloads them on start; clocks pause while the server is down |
+
+The site also runs as a claude.ai Artifact (`node web/build-artifact.js`). There, games live in
+the Artifact's shared database and both browsers check every move. That version has invite
+codes, the lobby, draw offers, abort and rematches, but no clocks or quick pairing, since there
+is no server to keep time.
+
+Not built yet: accounts and ratings, premoves, chat, takeback requests and
+correspondence (days per move) games.
 
 ## Move classifications
 
