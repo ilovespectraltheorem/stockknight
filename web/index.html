@@ -40,7 +40,7 @@
         <button class="mode-card" data-mode="pve">
           <span class="mode-icon" data-piece="N"></span>
           <span class="mode-title">Play Stockhorse</span>
-          <span class="mode-sub">Four opponents, from a Page who blunders to a Champion who doesn't.</span>
+          <span class="mode-sub">Pick a strength by Elo, from a beginner who blunders to 3000 at full strength.</span>
         </button>
         <button class="mode-card" data-mode="local">
           <span class="mode-icon" data-piece="R"></span>
@@ -191,7 +191,25 @@
   <dialog id="dlgPve" class="dialog">
     <form method="dialog">
       <h2>Choose your opponent</h2>
-      <div class="opponents" id="opponents"></div>
+      <div class="strength">
+        <div class="strength-head">
+          <span class="strength-piece" id="strengthPiece" aria-hidden="true"></span>
+          <div>
+            <div class="strength-elo"><b id="strengthElo">1200</b> <span>Elo</span> <span class="strength-name" id="strengthName"></span></div>
+            <small id="strengthBlurb"></small>
+          </div>
+        </div>
+        <div class="strength-row">
+          <button class="icon-btn" id="strengthDown" aria-label="50 Elo weaker">&minus;</button>
+          <input type="range" id="strengthRange" min="400" max="3000" step="50" value="1200" aria-label="Stockhorse strength in Elo">
+          <button class="icon-btn" id="strengthUp" aria-label="50 Elo stronger">+</button>
+        </div>
+        <div class="strength-scale"><span id="strengthMin">400</span><span id="strengthMax">3000</span></div>
+        <div class="strength-presets" id="strengthPresets">
+          <button data-elo="800">800</button><button data-elo="1200">1200</button><button data-elo="1600">1600</button>
+          <button data-elo="2000">2000</button><button data-elo="2400">2400</button><button data-elo="3000">3000</button>
+        </div>
+      </div>
       <h3>Play as</h3>
       <div class="seg" id="colorSeg">
         <label><input type="radio" name="color" value="w" checked><span>White</span></label>

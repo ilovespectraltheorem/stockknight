@@ -338,16 +338,33 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
 .dialog h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 16px 0 8px; }
 .dialog p { color: var(--muted); margin: 0 0 8px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
-.opponents { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.opp { position: relative; }
-.opp input { position: absolute; opacity: 0; }
-.opp > span {
-  display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 10px; cursor: pointer; height: 100%;
+.strength-head { display: flex; gap: 12px; align-items: center; min-height: 64px; }
+.strength-piece { width: 48px; height: 48px; flex: none; }
+.strength-piece .piece { width: 100%; height: 100%; }
+.strength-elo { font-size: 15px; color: var(--muted); }
+.strength-elo b { font-family: var(--font-display); font-size: 30px; color: var(--text); font-variant-numeric: tabular-nums; }
+.strength-name { color: var(--accent); font-weight: 600; margin-left: 4px; }
+.strength-head small { display: block; color: var(--muted); font-size: 13px; line-height: 1.35; }
+.strength-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.strength-row .icon-btn { flex: none; font-size: 20px; line-height: 1; color: var(--text); }
+.strength-row .icon-btn:disabled { opacity: 0.4; cursor: default; }
+.strength-row input[type=range] {
+  flex: 1; min-width: 0; height: 6px; border-radius: 3px; appearance: none; -webkit-appearance: none; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) var(--fill, 50%), var(--line) var(--fill, 50%));
 }
-.opp .piece { width: 34px; height: 34px; flex: none; }
-.opp small { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
-.opp input:checked + span { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
-.opp input:focus-visible + span { outline: 2px solid var(--accent); }
+.strength-row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--accent);
+}
+.strength-row input[type=range]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--accent);
+}
+.strength-row input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+.strength-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 4px 42px 0; }
+.strength-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.strength-presets button {
+  font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--text); cursor: pointer;
+}
+.strength-presets button:hover { border-color: var(--accent); }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .seg label { position: relative; }
 .seg input { position: absolute; opacity: 0; }

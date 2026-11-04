@@ -11,13 +11,14 @@ node web/server.js            # http://localhost:8080/  (all features, including
 node web/server.js --data rooms.json   # the same, keeping games across restarts
 python3 -m http.server        # from the repo root, then open /web/  (everything but online games)
 node web/test.js              # engine tasks, review classification, online server
+node web/calibrate.js         # re-measure the Elo of each strength setting (see docs/STRENGTH.md)
 ```
 
 ## What it does
 
 | Feature | How |
 |---|---|
-| Play the engine | Four opponents. Page (depth 1, wide random margin), Squire, Knight and Champion are the reference engine's `casual`, `club` and `strong` levels. The engine runs in a Web Worker |
+| Play the engine | Pick Stockhorse's strength by Elo with a slider (50-point steps, up to 3000 = full strength). Each Elo maps to a search node budget and a move-choice temperature, measured by self-play; see [STRENGTH.md](STRENGTH.md). The engine runs in a Web Worker |
 | Pass and play | Both sides on one screen; the board turns to the side to move |
 | Online | See [Online play](#online-play) below |
 | Moving | Click or drag a piece. To drop, click a piece in your reserve (beside the board), then a highlighted square. A reserve piece is only clickable when it has a legal drop |
