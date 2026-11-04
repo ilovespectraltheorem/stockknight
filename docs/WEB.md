@@ -10,7 +10,7 @@ the engines play. No build step and no dependencies.
 node web/server.js            # http://localhost:8080/  (all features, including online games)
 node web/server.js --data rooms.json   # the same, keeping games across restarts
 python3 -m http.server        # from the repo root, then open /web/  (everything but online games)
-node web/test.js              # engine tasks, review classification, online server
+node web/test.js              # engine tasks, analysis lines and move tree, review classification, online server
 node web/calibrate.js         # re-measure the Elo of each strength setting (see docs/STRENGTH.md)
 ```
 
@@ -22,8 +22,26 @@ node web/calibrate.js         # re-measure the Elo of each strength setting (see
 | Pass and play | Both sides on one screen; the board turns to the side to move |
 | Online | See [Online play](#online-play) below |
 | Moving | Click or drag a piece. To drop, click a piece in your reserve (beside the board), then a highlighted square. A reserve piece is only clickable when it has a legal drop |
+| Analysis board | See [Analysis board](#analysis-board) below |
 | Game review | Every position is searched with a full window for every legal move, so each played move has an exact score at the same depth as the best move. Review time per position: Quick 0.25 s, Standard 0.7 s, Deep 1.8 s |
 | Saved games | The last 40 finished or reviewed games are kept in the browser (`localStorage`). Move lists can be copied and pasted back in for review |
+
+## Analysis board
+
+`#/analysis`, from the Analysis link in the top bar or the Analysis board card on the home page.
+
+| Feature | How |
+|---|---|
+| Starting point | The starting position, any position set up in the editor, or a position string pasted into the Position box (a FEN as in [RULES.md](RULES.md), optionally followed by `moves` and UCI moves, as Copy moves writes it). Review's **Analyse from here** and the play screen's **Analyse** open a game with the cursor on the chosen move |
+| Position editor | Pick a piece (or the eraser), then click squares; clicking the same piece again or right-clicking removes it. Set each side's reserve (up to 2 pawns, 1 bishop, 1 rook) and the side to move. The editor says what to fix before it lets a position through: a missing king, kings side by side, or the side not to move standing in check |
+| Moves | Moves and drops for both sides, by click or drag. Every move tried is kept in a tree: a new move from an earlier position starts a variation, shown indented under the move it replaces. Click any move to go there; ←, →, Home and End step through the line, F flips the board. **Make main line** promotes the current line, **Delete from here** removes the current move and what follows |
+| Stockhorse | The best 1, 2, 3 or 5 moves with their scores and lines (MultiPV), an eval bar, and arrows for the top three moves. The search deepens in steps (0.25 s, 0.7 s, 1.8 s, 4.5 s, 12 s) on its own Web Worker and keeps its hash table between steps; moving on restarts it. Click a move in a line to play the line up to it. The switch turns the engine off |
+| Play from here | Opens the opponent picker and starts a game against Stockhorse from the current position. Such games save and review like any other |
+| Remembered | The tree and the current move are kept in the browser, so the board is as you left it next time |
+
+The engine side is `lines` in `web/engine-tasks.js`: the first k root moves get a full window
+and every other move a null window against the k-th best score, re-searched only when it beats
+it, so asking for three lines costs little depth. The move tree is `web/tree.js`.
 
 ## Online play
 

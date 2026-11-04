@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const SK = require('../reference/engine.js');
 const T = require('./engine-tasks.js');
 const R = require('./review.js');
+const { MoveTree } = require('./tree.js');
 const { createServer, createGameServer } = require('./server.js');
 
 const tests = [];
@@ -102,6 +103,67 @@ test('analyse finds a mate in one and reports no moves when mated', () => {
   assert.equal(pos.status().state, 'win');
   const done = T.analyse({ moves: [...found.moves, a.best], movetime: 50 });
   assert.equal(done.legal, 0);
+});
+
+test('lines gives the best moves in order, each with a legal line', () => {
+  const r = T.lines({ moves: ['b2b3'], movetime: 300, multipv: 3 });
+  assert.equal(r.lines.length, 3);
+  assert.equal(new Set(r.lines.map(l => l.move)).size, 3);
+  for (let i = 1; i < r.lines.length; i++) assert.ok(r.lines[i - 1].score >= r.lines[i].score);
+  for (const l of r.lines) {
+    assert.equal(l.pv[0], l.move);
+    assert.doesNotThrow(() => T.build(null, ['b2b3', ...l.pv]));
+  }
+  const one = T.lines({ moves: ['b2b3'], movetime: 300, depth: 4, multipv: 1 });
+  assert.equal(one.depth, 4);
+  assert.equal(one.lines.length, 1);
+  const a = T.analyse({ moves: ['b2b3'], movetime: 300, depth: 4 });
+  assert.ok(a.scores[one.lines[0].move] >= a.score - 40, 'the best line is among the best moves by analyse');
+});
+
+test('lines from a set-up position: a mate in one, a lone legal move, and no moves', () => {
+  // White: Ke1, Rc1; Black: Ka6 hemmed in by its own pawns, Rc1-c6 mates.
+  const mateFen = 'k5/pp4/6/6/6/2R1K1[-] w 0 1';
+  const r = T.lines({ fen: mateFen, moves: [], movetime: 300, multipv: 2 });
+  assert.equal(SK.mateIn(r.lines[0].score), 1);
+  assert.equal(T.build(mateFen, [r.lines[0].move]).status().state, 'win');
+  const pos = new SK.Position(mateFen);
+  pos.makeMove(pos.moveFromUci(r.lines[0].move));
+  const done = T.lines({ fen: pos.fen(), moves: [], movetime: 50 });
+  assert.deepEqual(done.lines, []);
+  assert.equal(done.legal, 0);
+  // More lines asked for than there are legal moves.
+  const few = new SK.Position(mateFen).legalMoves().length;
+  assert.equal(T.lines({ fen: mateFen, moves: [], movetime: 100, depth: 2, multipv: 999 }).lines.length, Math.min(few, 999));
+});
+
+test('move tree: lines, variations, promotion, deletion and storage', () => {
+  const t = new MoveTree();
+  const a = t.addLine(0, ['b2b3', 'c5c4', 'a2a3']);
+  assert.deepEqual(t.path(a.id), ['b2b3', 'c5c4', 'a2a3']);
+  assert.equal(a.text, 'a2-a3');
+  assert.equal(t.add(0, 'b2b3').id, t.root.children[0].id, 'an existing move is reused');
+  assert.equal(t.add(0, 'b2b4'), null, 'an illegal move is refused');
+  const v = t.add(t.root.children[0].id, 'a5a4');
+  assert.ok(!t.isMainline(v.id) && t.isMainline(a.id));
+  assert.deepEqual(t.mainline().map(n => n.uci), ['b2b3', 'c5c4', 'a2a3']);
+  t.promote(v.id);
+  assert.ok(t.isMainline(v.id));
+  assert.deepEqual(t.mainline().map(n => n.uci), ['b2b3', 'a5a4']);
+  const back = MoveTree.fromJSON(JSON.parse(JSON.stringify(t.toJSON())));
+  assert.deepEqual(back.toJSON(), t.toJSON());
+  assert.ok(back.find(['b2b3', 'c5c4', 'a2a3']));
+  assert.equal(t.remove(v.id), t.root.children[0].id);
+  assert.equal(t.get(v.id), null);
+  assert.deepEqual(t.mainline().map(n => n.uci), ['b2b3', 'c5c4', 'a2a3']);
+  assert.equal(t.position(a.id).fen(), T.build(null, ['b2b3', 'c5c4', 'a2a3']).fen());
+  // From a set-up position, and no moves once the game is over.
+  const mateFen = 'k5/pp4/6/6/6/2R1K1[-] w 0 1';
+  const m = new MoveTree(mateFen);
+  const mate = m.add(0, 'c1c6');
+  assert.ok(mate && mate.text.endsWith('#'));
+  assert.equal(m.add(mate.id, 'a5a4'), null);
+  assert.throws(() => new MoveTree('6/6/6/6/6/6[-] w 0 1'));
 });
 
 test('win probability and accuracy are monotonic and bounded', () => {

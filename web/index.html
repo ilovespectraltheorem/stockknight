@@ -16,6 +16,7 @@
     </a>
     <nav class="nav">
       <a href="#/" data-nav="home">Play</a>
+      <a href="#/analysis" data-nav="analysis">Analysis</a>
       <a href="#/review" data-nav="review">Review</a>
       <a href="#/rules" data-nav="rules">Rules</a>
     </nav>
@@ -52,6 +53,11 @@
           <span class="mode-title">Play online</span>
           <span class="mode-sub" id="onlineSub">Quick pairing or an invite link, with clocks, draw offers and rematches.</span>
         </button>
+        <button class="mode-card" data-mode="analysis">
+          <span class="mode-icon" data-piece="K"></span>
+          <span class="mode-title">Analysis board</span>
+          <span class="mode-sub">Set up any position, try moves for both sides and see Stockhorse's best lines.</span>
+        </button>
         <button class="mode-card" data-mode="review">
           <span class="mode-icon" data-piece="B"></span>
           <span class="mode-title">Review a game</span>
@@ -87,6 +93,7 @@
           </div>
           <div class="controls">
             <button class="btn" id="btnNew">New game</button>
+            <button class="btn" id="btnAnalysePlay" title="Open this game on the analysis board">Analyse</button>
             <button class="btn primary" id="btnReviewThis">Review this game</button>
           </div>
           <div class="online-box" id="onlineBox" hidden>
@@ -147,7 +154,89 @@
             </label>
             <button class="btn" id="btnReanalyse">Analyse again</button>
             <button class="btn" id="btnCopyMoves">Copy moves</button>
+            <button class="btn" id="btnAnalyseHere" title="Open this position on the analysis board">Analyse from here</button>
             <button class="btn" id="btnOther">Other games</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Analysis board ----------------------------------------------------------------------- -->
+    <section class="view" id="view-analysis" hidden>
+      <div class="arena">
+        <div class="board-col">
+          <div class="player-bar" id="aBarTop"></div>
+          <div class="board-wrap">
+            <div class="evalbar" id="aEval"><div class="evalbar-fill"></div><span class="evalbar-text"></span></div>
+            <div class="board" id="aBoard"></div>
+          </div>
+          <div class="player-bar" id="aBarBottom"></div>
+          <div class="navrow" id="aNav">
+            <button class="btn" data-astep="start" title="Start (Home)">⏮</button>
+            <button class="btn" data-astep="prev" title="Back (←)">◀</button>
+            <button class="btn" data-astep="next" title="Forward (→)">▶</button>
+            <button class="btn" data-astep="end" title="End of the line (End)">⏭</button>
+            <button class="btn" id="aFlip" title="Flip board (F)">⇅</button>
+          </div>
+        </div>
+
+        <aside class="panel" id="aPanel">
+          <div class="status" id="aStatus"></div>
+          <div class="engine" id="aEngine">
+            <div class="engine-head">
+              <label class="switch" title="Stockhorse analysis on or off">
+                <input type="checkbox" id="aEngineOn" checked><span class="switch-track"></span>
+                <span>Stockhorse</span>
+              </label>
+              <span class="engine-score" id="aScore"></span>
+              <label class="depth">Lines
+                <select id="aMultipv">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+            </div>
+            <div class="engine-info" id="aInfo"></div>
+            <ol class="pv-lines" id="aLines"></ol>
+          </div>
+          <div class="tree" id="aTree"></div>
+          <div class="controls">
+            <button class="btn" id="aPromote" title="Make this line the main line">Make main line</button>
+            <button class="btn danger" id="aDelete" title="Delete this move and everything after it">Delete from here</button>
+          </div>
+          <label class="field">Position
+            <div class="share-row"><input id="aFen" spellcheck="false" autocomplete="off"><button class="btn" id="aFenCopy" type="button">Copy</button><button class="btn" id="aFenLoad" type="button">Load</button></div>
+          </label>
+          <p class="error" id="aFenError" hidden></p>
+          <div class="controls">
+            <button class="btn" id="aSetup">Set up position</button>
+            <button class="btn" id="aReset" title="Clear the moves and start from the starting position">Starting position</button>
+            <button class="btn" id="aCopyLine" title="Copy the moves from the first position to this one">Copy moves</button>
+            <button class="btn primary" id="aPlayHere" title="Play Stockhorse from this position">Play from here</button>
+          </div>
+        </aside>
+
+        <aside class="panel editor" id="aEditor" hidden>
+          <div class="status">Set up a position<span class="sub">Pick a piece, then click squares to place it. Click a piece of the same kind, or right-click, to remove it.</span></div>
+          <div class="palette" id="ePalette"></div>
+          <h3 class="editor-h">Reserves</h3>
+          <div class="ereserves" id="eReserves"></div>
+          <h3 class="editor-h">Side to move</h3>
+          <div class="seg" id="eSide">
+            <label><input type="radio" name="eside" value="w" checked><span>White</span></label>
+            <label><input type="radio" name="eside" value="b"><span>Black</span></label>
+          </div>
+          <div class="controls">
+            <button class="btn" id="eStart">Starting position</button>
+            <button class="btn" id="eClear">Clear board</button>
+            <button class="btn" id="eFlip">⇅ Flip</button>
+          </div>
+          <p class="error" id="eError" hidden></p>
+          <div class="controls">
+            <button class="btn" id="eCancel">Cancel</button>
+            <button class="btn primary" id="eDone">Analyse this position</button>
           </div>
         </aside>
       </div>
@@ -285,6 +374,7 @@
   <script src="../reference/engine.js"></script>
   <script src="engine-tasks.js"></script>
   <script src="review.js"></script>
+  <script src="tree.js"></script>
   <script src="pieces.js"></script>
   <script src="online.js"></script>
   <script src="app.js"></script>

@@ -8,6 +8,7 @@
   const { Position, START_FEN, WHITE, BLACK, moveFrom, moveTo, moveDrop } = SK;
   const { pieceSvg } = window.Pieces;
   const R = window.Review;
+  const MoveTree = window.MoveTree;
   const LETTERS = '.PNBRQK';
   const DROP_ORDER = [SK.PAWN, SK.BISHOP, SK.ROOK];
   const colorName = c => (c === WHITE ? 'White' : 'Black');
@@ -466,6 +467,12 @@
       $('#btnResign').onclick = () => this.resign();
       $('#btnNew').onclick = () => this.again();
       $('#btnReviewThis').onclick = () => this.reviewThis();
+      $('#btnAnalysePlay').onclick = () => {
+        const g = this.game;
+        if (!g) return;
+        analysis.load(g.startFen, g.moves.slice());
+        location.hash = '#/analysis';
+      };
       $('#btnCopy').onclick = () => {
         $('#shareLink').select();
         navigator.clipboard?.writeText($('#shareLink').value).then(
@@ -496,16 +503,17 @@
         white = humanColor === WHITE ? 'You' : engineName;
         black = humanColor === BLACK ? 'You' : engineName;
       }
-      this.game = { id, mode: opts.mode, startFen: START_FEN, moves: [], white, black, result: null, elo: opts.elo, humanColor, date: Date.now() };
-      this.pos = new Position(START_FEN);
-      this.flipped = opts.mode === 'pve' ? humanColor === BLACK : false;
+      const startFen = opts.fen || START_FEN;
+      this.game = { id, mode: opts.mode, startFen, moves: [], white, black, result: null, elo: opts.elo, humanColor, date: Date.now() };
+      this.pos = new Position(startFen);
+      this.flipped = opts.mode === 'pve' ? humanColor === BLACK : this.pos.side === BLACK;
       $('#sharePanel').hidden = true;
       this.render();
       this.maybeEngine();
     },
 
     again() {
-      if (!this.game || this.game.mode === 'pve') return openPveDialog();
+      if (!this.game || this.game.mode === 'pve') return openPveDialog(this.game && this.game.startFen !== START_FEN ? this.game.startFen : null);
       if (this.game.mode === 'online') return openOnlineDialog();
       this.start({ mode: 'local' });
     },
@@ -678,6 +686,8 @@
       $('#btnEval').classList.toggle('primary', this.showEval);
       $('#btnUndo').disabled = g.mode === 'online' || !g.moves.length;
       $('#btnResign').disabled = !!g.result || (g.mode === 'online' && !(this.online && this.online.color !== null));
+      // No engine help in a live game against a person.
+      $('#btnAnalysePlay').disabled = g.mode === 'online' && !g.result && !!(this.online && this.online.color !== null);
       this.renderOnline();
       if (g.mode === 'online') this.tickOnline();
     },
@@ -736,14 +746,16 @@
     renderMoves() {
       const g = this.game;
       const pos = new Position(g.startFen);
-      const items = [];
+      const off = pos.side === BLACK ? 1 : 0, no0 = pos.moveNo;
+      const items = off && g.moves.length ? [`<li><span class="no">${no0}.</span><span class="mv muted">…</span>`] : [];
       g.moves.forEach((u, i) => {
         const m = pos.moveFromUci(u);
         const text = pos.moveToText(m);
         pos.makeMove(m);
-        if (i % 2 === 0) items.push(`<li><span class="no">${i / 2 + 1}.</span>`);
+        const j = i + off;
+        if (j % 2 === 0) items.push(`<li><span class="no">${no0 + j / 2}.</span>`);
         items.push(`<span class="mv${i === g.moves.length - 1 ? ' cur' : ''}">${esc(text)}</span>`);
-        if (i % 2 === 1) items.push('</li>');
+        if (j % 2 === 1) items.push('</li>');
       });
       const ol = $('#playMoves');
       ol.innerHTML = items.join('');
@@ -1099,6 +1111,11 @@
         this.go(Math.round(((e.clientX - r.left) / r.width) * n));
       });
       $('#btnImport').onclick = () => this.importMoves();
+      $('#btnAnalyseHere').onclick = () => {
+        if (!this.game) return;
+        analysis.load(this.game.startFen, this.game.moves.slice(), this.cursor);
+        location.hash = '#/analysis';
+      };
       $('#btnOther').onclick = () => {
         this.runId++;
         reviewEngine.reset();
@@ -1274,15 +1291,18 @@
 
     renderMoves() {
       const g = this.game;
-      const items = [];
+      const start = new Position(g.startFen);
+      const off = start.side === BLACK ? 1 : 0, no0 = start.moveNo;
+      const items = off && g.moves.length ? [`<li><span class="no">${no0}.</span><span class="mv muted">…</span>`] : [];
       this.moveInfo.forEach((mi, i) => {
         const p = this.data ? this.data.plies[i] : null;
-        if (i % 2 === 0) items.push(`<li><span class="no">${i / 2 + 1}.</span>`);
+        const j = i + off;
+        if (j % 2 === 0) items.push(`<li><span class="no">${no0 + j / 2}.</span>`);
         const badge = p ? badgeHtml(p.cls) : '';
         items.push(`<button class="mv${i === this.cursor - 1 ? ' cur' : ''}" data-ply="${i}">${badge}<span>${esc(mi.text)}</span></button>`);
-        if (i % 2 === 1) items.push('</li>');
+        if (j % 2 === 1) items.push('</li>');
       });
-      if (g.moves.length % 2 === 1) items.push('</li>');
+      if ((g.moves.length + off) % 2 === 1) items.push('</li>');
       const ol = $('#reviewMoves');
       ol.innerHTML = items.join('');
       const cur = ol.querySelector('.cur');
@@ -1379,10 +1399,622 @@
     },
   };
 
+  // --- analysis board ---------------------------------------------------------------------
+
+  // Move numbers for a ply in a game that starts from `fen`: "3." before a White move, "3…"
+  // before a Black one. ply counts from 1 for the first move.
+  function numberer(fen) {
+    const p = new Position(fen);
+    const off = p.side === BLACK ? 1 : 0;
+    return (ply, force) => {
+      const j = ply - 1 + off;
+      const no = p.moveNo + Math.floor(j / 2);
+      if (j % 2 === 0) return `${no}.`;
+      return force ? `${no}…` : '';
+    };
+  }
+
+  const LINE_COLORS = ['#5f9e3a', '#3d7fd1', '#8a8f96'];
+  const PALETTE = [SK.KING, SK.QUEEN, SK.ROOK, SK.BISHOP, SK.KNIGHT, SK.PAWN];
+  const RESERVE_MAX = { [SK.PAWN]: 2, [SK.ROOK]: 1, [SK.BISHOP]: 1 };
+  const ENGINE_STEPS = [250, 700, 1800, 4500, 12000]; // ms per search, each one deeper
+
+  const analysis = {
+    board: null,
+    tree: null,
+    cur: 0,
+    flipped: store.get('sk.anFlip', false),
+    engineOn: store.get('sk.anEngine', true),
+    multipv: store.get('sk.anLines', 3),
+    runId: 0,
+    result: null, // the latest engine result for the current node
+    thinking: false,
+    dropSel: null,
+    editing: null, // { board, hand, side, tool } while setting up a position
+    eng: null,
+    active: false,
+
+    engine() {
+      return this.eng || (this.eng = new EngineClient());
+    },
+
+    init() {
+      this.board = new BoardView($('#aBoard'), { onMove: uci => this.play(uci) });
+      this.board.onSelect = sel => {
+        this.dropSel = sel && sel.drop ? sel.drop : null;
+        this.renderBars(this.tree.position(this.cur));
+        this.renderStatus(this.tree.position(this.cur));
+      };
+      for (const id of ['#aBarTop', '#aBarBottom']) {
+        $(id).addEventListener('click', e => {
+          const b = e.target.closest('.res.usable');
+          if (b && !this.editing) this.board.selectDrop(+b.dataset.type);
+        });
+      }
+      $('#aNav').addEventListener('click', e => {
+        const b = e.target.closest('[data-astep]');
+        if (b) this.step(b.dataset.astep);
+      });
+      $('#aFlip').onclick = () => this.flip();
+      $('#eFlip').onclick = () => this.flip();
+      $('#aEngineOn').checked = this.engineOn;
+      $('#aEngineOn').onchange = () => {
+        this.engineOn = $('#aEngineOn').checked;
+        store.set('sk.anEngine', this.engineOn);
+        this.run();
+      };
+      $('#aMultipv').value = String(this.multipv);
+      $('#aMultipv').onchange = () => {
+        this.multipv = +$('#aMultipv').value || 3;
+        store.set('sk.anLines', this.multipv);
+        this.run();
+      };
+      $('#aTree').addEventListener('click', e => {
+        const b = e.target.closest('[data-node]');
+        if (b) this.go(+b.dataset.node);
+      });
+      $('#aLines').addEventListener('click', e => {
+        const b = e.target.closest('[data-line]');
+        if (!b || !this.result) return;
+        const line = this.result.lines[+b.dataset.line];
+        if (line) this.go(this.tree.addLine(this.cur, line.pv.slice(0, +b.dataset.idx + 1)).id);
+      });
+      $('#aPromote').onclick = () => {
+        this.tree.promote(this.cur);
+        this.save();
+        this.render();
+      };
+      $('#aDelete').onclick = () => this.go(this.tree.remove(this.cur));
+      $('#aFenCopy').onclick = () => copyText($('#aFen').value, 'Position copied');
+      $('#aFenLoad').onclick = () => this.loadFenInput();
+      $('#aFen').addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.loadFenInput();
+        }
+      });
+      $('#aSetup').onclick = () => this.openEditor();
+      $('#aReset').onclick = () => this.load(START_FEN);
+      $('#aCopyLine').onclick = () => {
+        const moves = this.tree.path(this.cur).join(' ');
+        if (!moves) return toast('No moves yet');
+        const text = this.tree.fen === START_FEN ? moves : `${this.tree.fen} moves ${moves}`;
+        copyText(text, 'Moves copied');
+      };
+      $('#aPlayHere').onclick = () => openPveDialog(this.tree.position(this.cur).fen());
+
+      // The position editor.
+      $('#ePalette').addEventListener('click', e => {
+        const b = e.target.closest('[data-tool]');
+        if (!b) return;
+        this.editing.tool = +b.dataset.tool;
+        this.renderEditor();
+      });
+      $('#eReserves').addEventListener('click', e => {
+        const b = e.target.closest('[data-res]');
+        if (!b) return;
+        const [c, t, d] = b.dataset.res.split(':').map(Number);
+        const h = this.editing.hand[c];
+        h[t] = Math.max(0, Math.min(RESERVE_MAX[t], h[t] + d));
+        this.renderEditor();
+      });
+      $('#eSide').addEventListener('change', () => {
+        this.editing.side = $('#eSide input:checked').value === 'b' ? BLACK : WHITE;
+        this.renderEditor();
+      });
+      $('#eStart').onclick = () => this.editFrom(new Position(START_FEN));
+      $('#eClear').onclick = () => {
+        this.editing.board.fill(0);
+        this.renderEditor();
+      };
+      $('#eCancel').onclick = () => this.closeEditor();
+      $('#eDone').onclick = () => {
+        const v = this.validate();
+        if (v.error) return;
+        this.closeEditor(false);
+        this.load(v.fen);
+      };
+      $('#aBoard').addEventListener('pointerdown', e => {
+        if (!this.editing) return;
+        const sqEl = e.target.closest('.sq');
+        if (!sqEl) return;
+        e.preventDefault();
+        this.editSquare(+sqEl.dataset.sq, e.button === 2);
+      });
+      $('#aBoard').addEventListener('contextmenu', e => {
+        if (this.editing) e.preventDefault();
+      });
+
+      document.addEventListener('keydown', e => {
+        if (!this.active || this.editing || e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+        const k = { ArrowLeft: 'prev', ArrowRight: 'next', Home: 'start', End: 'end' }[e.key];
+        if (k) {
+          e.preventDefault();
+          this.step(k);
+        } else if (e.key === 'f') {
+          this.flip();
+        }
+      });
+
+      const saved = store.get('sk.analysis', null);
+      try {
+        if (saved && saved.ruleset === SK.RULESET) {
+          this.tree = MoveTree.fromJSON(saved);
+          const n = this.tree.find(saved.at || []);
+          this.cur = n ? n.id : 0;
+        }
+      } catch {
+        this.tree = null;
+      }
+      if (!this.tree) {
+        this.tree = new MoveTree(START_FEN);
+        this.cur = 0;
+      }
+    },
+
+    // A new board from `fen`, with `moves` as its main line and the cursor after `at` of them.
+    load(fen, moves = [], at = moves.length) {
+      this.tree = new MoveTree(fen || START_FEN);
+      this.tree.addLine(0, moves);
+      const n = this.tree.find(moves.slice(0, at));
+      this.cur = n ? n.id : 0;
+      this.result = null;
+      this.save();
+      if (this.active) {
+        this.render();
+        this.run();
+      }
+    },
+
+    loadFenInput() {
+      const text = $('#aFen').value.trim();
+      const err = $('#aFenError');
+      // Accept a bare position, or "<position> moves <uci …>" as Copy moves writes it.
+      const m = /^(.*?)(?:\s+moves\s+(.*))?$/.exec(text);
+      try {
+        if (!text) throw new Error('Paste a position first.');
+        const fen = m[1].trim();
+        new Position(fen);
+        const moves = (m[2] || '').split(/\s+/).filter(Boolean);
+        this.load(fen, moves);
+        const got = this.tree.path(this.cur).length;
+        err.hidden = true;
+        if (got < moves.length) toast(`Loaded the position and ${got} of ${moves.length} moves`);
+        else toast('Position loaded');
+      } catch (e) {
+        err.textContent = `That position does not read right: ${String(e.message).replace(/^bad FEN:?\s*/, '').replace(/: [^:]*$/, '')}.`;
+        err.hidden = false;
+      }
+    },
+
+    save() {
+      store.set('sk.analysis', { ...this.tree.toJSON(), at: this.tree.path(this.cur), ruleset: SK.RULESET });
+    },
+
+    show() {
+      this.active = true;
+      if (this.editing) return this.renderEditor();
+      this.render();
+      this.run();
+    },
+
+    hide() {
+      this.active = false;
+      this.stop();
+    },
+
+    stop() {
+      this.runId++;
+      this.thinking = false;
+      if (this.eng && this.eng.pending.size) this.eng.reset();
+    },
+
+    flip() {
+      this.flipped = !this.flipped;
+      store.set('sk.anFlip', this.flipped);
+      if (this.editing) this.renderEditor();
+      else this.render();
+    },
+
+    play(uci) {
+      const n = this.tree.add(this.cur, uci);
+      if (n) this.go(n.id);
+    },
+
+    go(id) {
+      if (!this.tree.get(id)) return;
+      this.cur = id;
+      this.dropSel = null;
+      this.result = null;
+      this.save();
+      this.render();
+      this.run();
+    },
+
+    step(k) {
+      const n = this.tree.get(this.cur);
+      if (k === 'start') this.go(0);
+      else if (k === 'prev' && n.parent) this.go(n.parent.id);
+      else if (k === 'next' && n.children.length) this.go(n.children[0].id);
+      else if (k === 'end') {
+        const line = this.tree.mainline(this.cur);
+        if (line.length) this.go(line[line.length - 1].id);
+      }
+    },
+
+    // --- engine ---
+
+    async run() {
+      this.stop();
+      const run = this.runId;
+      this.result = null;
+      const pos = this.tree.position(this.cur);
+      if (!this.engineOn || this.editing || !this.active || pos.status().state !== 'ongoing') return this.renderEngine(pos);
+      const eng = this.engine();
+      const node = this.cur, fen = this.tree.fen, moves = this.tree.path(node);
+      const steps = eng.worker ? ENGINE_STEPS : ENGINE_STEPS.slice(0, 2); // on the page, keep it short
+      this.thinking = true;
+      this.renderEngine(pos);
+      for (const movetime of steps) {
+        let r;
+        try {
+          r = await eng.call('lines', { fen, moves, movetime, depth: 40, multipv: this.multipv });
+        } catch {
+          return; // a newer position took over
+        }
+        if (run !== this.runId) return;
+        const done = this.result && r.depth <= this.result.depth && movetime > ENGINE_STEPS[1];
+        if (!this.result || r.depth >= this.result.depth) this.result = { ...r, node };
+        const top = r.lines[0];
+        if (done || (top && Math.abs(top.score) >= SK.MATE - 1000 && r.depth >= SK.MATE - Math.abs(top.score))) break;
+        this.renderEngine(pos);
+        this.renderArrows(pos);
+      }
+      this.thinking = false;
+      this.renderEngine(pos);
+      this.renderArrows(pos);
+    },
+
+    // --- rendering ---
+
+    render() {
+      const pos = this.tree.position(this.cur);
+      const node = this.tree.get(this.cur);
+      const st = pos.status();
+      let lastMove = 0;
+      if (node.parent) lastMove = this.tree.position(node.parent.id).moveFromUci(node.uci);
+      this.board.set({ pos, flipped: this.flipped, lastMove, movable: st.state === 'ongoing' ? pos.side : null, badge: null, arrows: this.arrows(pos) });
+      this.renderBars(pos);
+      this.renderStatus(pos);
+      this.renderTree();
+      this.renderEngine(pos);
+      const fenEl = $('#aFen');
+      if (document.activeElement !== fenEl) fenEl.value = pos.fen();
+      $('#aFenError').hidden = true;
+      $('#aPromote').disabled = this.tree.isMainline(this.cur);
+      $('#aDelete').disabled = !node.parent;
+      $('#aPlayHere').disabled = st.state !== 'ongoing';
+      $('#aCopyLine').disabled = !node.parent;
+      for (const b of $$('#aNav [data-astep]')) {
+        const s = b.dataset.astep;
+        b.disabled = s === 'start' || s === 'prev' ? !node.parent : !node.children.length;
+      }
+    },
+
+    arrows(pos) {
+      const r = this.result;
+      if (!this.engineOn || !r || r.node !== this.cur) return [];
+      return r.lines.slice(0, 3).map((l, i) => ({ move: pos.moveFromUci(l.move), color: LINE_COLORS[i] })).filter(a => a.move).reverse();
+    },
+
+    renderArrows(pos) {
+      if (this.editing) return;
+      this.board.arrows = this.arrows(pos);
+      this.board.render(); // keeps a picked piece picked
+    },
+
+    renderBars(pos) {
+      const bottom = this.flipped ? BLACK : WHITE;
+      const st = pos.status();
+      const droppable = new Set(st.state === 'ongoing' ? this.board.legal.map(moveDrop).filter(Boolean) : []);
+      const bar = color => {
+        const mine = !this.editing && pos.side === color && st.state === 'ongoing';
+        const res = DROP_ORDER.map(t => {
+          const n = pos.hand[color][t];
+          const usable = mine && droppable.has(t);
+          const name = window.Pieces.NAMES[LETTERS[t]];
+          const cls = ['res', n ? '' : 'empty', usable ? 'usable' : '', usable && this.dropSel === t ? 'sel' : ''].join(' ');
+          return `<button class="${cls}" data-type="${t}" title="${n} ${name}${n === 1 ? '' : 's'} in reserve"${usable ? '' : ' tabindex="-1"'}>
+            ${pieceSvg(LETTERS[t], colorKey(color))}${n > 1 ? `<span class="count">${n}</span>` : ''}</button>`;
+        }).join('');
+        return `<div class="avatar">${pieceSvg('K', colorKey(color))}</div>
+          <div><div class="pname">${colorName(color)}</div><div class="psub">${mine ? 'To move' : ''}</div></div>
+          <div class="reserve">${res}</div>`;
+      };
+      $('#aBarBottom').innerHTML = bar(bottom);
+      $('#aBarTop').innerHTML = bar(bottom ^ 1);
+      $('#aBarBottom').classList.toggle('to-move', !this.editing && pos.side === bottom && st.state === 'ongoing');
+      $('#aBarTop').classList.toggle('to-move', !this.editing && pos.side !== bottom && st.state === 'ongoing');
+    },
+
+    renderStatus(pos) {
+      const st = pos.status();
+      let main, sub = '';
+      if (st.state !== 'ongoing') {
+        main = resultText(statusToResult(st));
+        sub = 'Step back, or click an earlier move, to try something else.';
+      } else {
+        main = `${colorName(pos.side)} to move`;
+        if (pos.inCheck()) sub = `${colorName(pos.side)} is in check.`;
+        else if (this.dropSel) sub = 'Pick an empty square to drop on.';
+        else sub = 'Move either side. A new move starts a variation.';
+      }
+      $('#aStatus').innerHTML = `${esc(main)}<span class="sub">${esc(sub)}</span>`;
+    },
+
+    renderTree() {
+      const t = this.tree;
+      const num = numberer(t.fen);
+      const parts = [];
+      const btn = (n, force) => {
+        const no = num(n.ply, force);
+        return `<button class="tmv${n.id === this.cur ? ' cur' : ''}" data-node="${n.id}">${no ? `<span class="no">${no}</span>` : ''}${esc(n.text)}</button>`;
+      };
+      // A line: `first` and its main continuation, each variation shown after the move it replaces.
+      const line = (first, depth) => {
+        let force = true;
+        for (let n = first; n; n = n.children[0]) {
+          parts.push(btn(n, force));
+          force = false;
+          const p = n.parent;
+          if (p.children[0] === n && p.children.length > 1) {
+            for (const v of p.children.slice(1)) {
+              parts.push(depth === 0 ? '<div class="var">' : '<span class="var inline">(');
+              line(v, depth + 1);
+              parts.push(depth === 0 ? '</div>' : ')</span>');
+            }
+            force = true;
+          }
+        }
+      };
+      if (t.root.children.length) line(t.root.children[0], 0);
+      const el = $('#aTree');
+      el.innerHTML = parts.length
+        ? `<div class="tree-start${this.cur === 0 ? ' cur' : ''}"><button class="tmv${this.cur === 0 ? ' cur' : ''}" data-node="0">Start</button></div><div class="mainline">${parts.join('')}</div>`
+        : '<p class="muted tree-empty">Make a move on the board, for either side. Every move you try is kept here, with side lines as variations.</p>';
+      const cur = el.querySelector('.tmv.cur');
+      if (cur) {
+        const top = cur.offsetTop - el.offsetTop;
+        if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - 30) el.scrollTop = top - el.clientHeight / 2;
+      }
+    },
+
+    renderEngine(pos) {
+      const on = this.engineOn;
+      const st = pos.status();
+      const r = this.result && this.result.node === this.cur ? this.result : null;
+      const white = s => (pos.side === WHITE ? s : -s);
+      $('#aEval').hidden = !on;
+      $('#aEngine').classList.toggle('off', !on);
+      let score = '', info = '', lines = '';
+      if (!on) {
+        info = 'Turn Stockhorse on to see its evaluation and best lines.';
+      } else if (st.state !== 'ongoing') {
+        const v = st.state === 'draw' ? 0 : st.winner === WHITE ? SK.MATE : -SK.MATE;
+        score = st.state === 'draw' ? '½–½' : st.winner === WHITE ? '1–0' : '0–1';
+        info = 'Game over.';
+        setEvalBar($('#aEval'), v, this.flipped);
+      } else if (!r) {
+        info = 'Stockhorse is thinking <span class="thinking"><i></i><i></i><i></i></span>';
+        score = '…';
+      } else {
+        const top = r.lines[0];
+        score = R.scoreText(white(top.score));
+        const nodes = r.nodes >= 1e6 ? `${(r.nodes / 1e6).toFixed(1)}M` : r.nodes >= 1e3 ? `${Math.round(r.nodes / 1e3)}k` : r.nodes;
+        info = `Depth ${r.depth} · ${nodes} nodes${this.thinking ? ' <span class="thinking"><i></i><i></i><i></i></span>' : ''}`;
+        setEvalBar($('#aEval'), white(top.score), this.flipped);
+        const num = numberer(this.tree.fen);
+        const ply0 = this.tree.get(this.cur).ply;
+        lines = r.lines.map((l, i) => {
+          const p = new Position(pos.fen());
+          const out = [];
+          for (let j = 0; j < Math.min(l.pv.length, 12); j++) {
+            const m = p.moveFromUci(l.pv[j]);
+            if (!m) break;
+            const no = num(ply0 + j + 1, j === 0);
+            out.push(`<button class="pmv" data-line="${i}" data-idx="${j}">${no ? `<span class="no">${no}</span>` : ''}${esc(p.moveToText(m))}</button>`);
+            p.makeMove(m);
+          }
+          return `<li><span class="pv-score" style="--lc:${LINE_COLORS[i] || 'var(--line)'}">${R.scoreText(white(l.score))}</span><span class="pv-moves">${out.join('')}</span></li>`;
+        }).join('');
+      }
+      if (!on || (!r && st.state === 'ongoing')) setEvalBar($('#aEval'), 0, this.flipped);
+      $('#aScore').textContent = score;
+      $('#aInfo').innerHTML = info;
+      $('#aLines').innerHTML = lines;
+    },
+
+    // --- position editor ---
+
+    openEditor() {
+      this.stop();
+      this.board.set({ movable: null });
+      this.editFrom(this.tree.position(this.cur), true);
+      $('#aPanel').hidden = true;
+      $('#aEditor').hidden = false;
+      $('#aEngine').classList.add('off');
+    },
+
+    editFrom(pos, fresh = false) {
+      this.editing = {
+        board: Int8Array.from(pos.board),
+        hand: [Array.from(pos.hand[WHITE]), Array.from(pos.hand[BLACK])],
+        side: pos.side,
+        tool: fresh || !this.editing ? SK.PAWN : this.editing.tool,
+      };
+      this.renderEditor();
+    },
+
+    closeEditor(rerender = true) {
+      this.editing = null;
+      $('#aBoard').classList.remove('editing');
+      $('#aPanel').hidden = false;
+      $('#aEditor').hidden = true;
+      if (rerender) {
+        this.render();
+        this.run();
+      }
+    },
+
+    editSquare(sq, erase) {
+      const e = this.editing;
+      const tool = e.tool;
+      if (erase || !tool || e.board[sq] === tool) {
+        e.board[sq] = 0;
+      } else {
+        if ((tool & 7) === SK.KING) {
+          for (let i = 0; i < 36; i++) if (e.board[i] === tool) e.board[i] = 0; // one king a side
+        }
+        e.board[sq] = tool;
+      }
+      this.renderEditor();
+    },
+
+    editorFen() {
+      const e = this.editing;
+      const chars = '.PNBRQK..pnbrqk.';
+      const rows = [];
+      for (let rank = 5; rank >= 0; rank--) {
+        let row = '', empty = 0;
+        for (let file = 0; file < 6; file++) {
+          const code = e.board[rank * 6 + file];
+          if (!code) {
+            empty++;
+            continue;
+          }
+          if (empty) row += empty;
+          empty = 0;
+          row += chars[code];
+        }
+        if (empty) row += empty;
+        rows.push(row);
+      }
+      let res = '';
+      for (const c of [WHITE, BLACK]) for (const t of [SK.PAWN, SK.ROOK, SK.BISHOP]) res += chars[t | (c << 3)].repeat(e.hand[c][t]);
+      return `${rows.join('/')}[${res || '-'}] ${e.side === WHITE ? 'w' : 'b'} 0 1`;
+    },
+
+    // { fen } for a legal setup, or { error } saying what to fix.
+    validate() {
+      const e = this.editing;
+      const fen = this.editorFen();
+      const kings = [WHITE, BLACK].map(c => e.board.findIndex(code => code === (SK.KING | (c << 3))));
+      if (kings[WHITE] < 0 || kings[BLACK] < 0) {
+        const missing = kings[WHITE] < 0 && kings[BLACK] < 0 ? 'Both sides need' : `${kings[WHITE] < 0 ? 'White' : 'Black'} needs`;
+        return { fen, error: `${missing} a king.` };
+      }
+      const [a, b] = kings;
+      if (Math.abs((a % 6) - (b % 6)) <= 1 && Math.abs(((a / 6) | 0) - ((b / 6) | 0)) <= 1) {
+        return { fen, error: 'The kings cannot stand next to each other.' };
+      }
+      try {
+        new Position(fen);
+      } catch (err) {
+        if (/not to move is in check/.test(err.message)) {
+          const other = colorName(e.side ^ 1);
+          return { fen, error: `${other} is in check, but it is ${colorName(e.side)}'s move. Switch the side to move, or move a piece.` };
+        }
+        return { fen, error: err.message.replace(/: [^:]*$/, '') };
+      }
+      return { fen };
+    },
+
+    renderEditor() {
+      const e = this.editing;
+      if (!e) return;
+      // The board.
+      const html = [];
+      for (let row = 0; row < 6; row++) {
+        for (let col = 0; col < 6; col++) {
+          const sq = this.flipped ? row * 6 + (5 - col) : (5 - row) * 6 + col;
+          const file = sq % 6, rank = (sq / 6) | 0;
+          const code = e.board[sq];
+          let inner = code ? pieceSvg(LETTERS[code & 7], code >> 3 ? 'b' : 'w') : '';
+          if (col === 0) inner += `<span class="coord rank">${rank + 1}</span>`;
+          if (row === 5) inner += `<span class="coord file">${'abcdef'[file]}</span>`;
+          html.push(`<div class="sq ${(file + rank) % 2 ? 'light' : 'dark'} edit${code ? ' has-piece' : ''}" data-sq="${sq}">${inner}</div>`);
+        }
+      }
+      $('#aBoard').innerHTML = html.join('');
+      $('#aBoard').classList.add('editing');
+
+      // The palette: White's pieces, Black's pieces, and the eraser.
+      const tool = (code, label, inner) =>
+        `<button class="tool${e.tool === code ? ' sel' : ''}" data-tool="${code}" title="${label}" aria-label="${label}" aria-pressed="${e.tool === code}">${inner}</button>`;
+      $('#ePalette').innerHTML = [WHITE, BLACK].map(c =>
+        `<div class="palette-row">${PALETTE.map(t => tool(t | (c << 3), `${colorName(c)} ${window.Pieces.NAMES[LETTERS[t]]}`, pieceSvg(LETTERS[t], colorKey(c)))).join('')}</div>`,
+      ).join('') + `<div class="palette-row">${tool(0, 'Eraser', '<svg viewBox="0 0 24 24" class="eraser"><path d="M15.5 4.5l4 4-9 9H6l-2.5-2.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 9l5 5M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Erase</span>')}</div>`;
+
+      // Reserves.
+      const stepper = (c, t) => {
+        const n = e.hand[c][t];
+        const name = window.Pieces.NAMES[LETTERS[t]];
+        return `<span class="stepper"><span class="res${n ? '' : ' empty'}" title="${colorName(c)} ${name}s in reserve">${pieceSvg(LETTERS[t], colorKey(c))}</span>
+          <button class="icon-btn" data-res="${c}:${t}:-1" aria-label="One ${colorName(c)} ${name} fewer" ${n ? '' : 'disabled'}>&minus;</button><b>${n}</b>
+          <button class="icon-btn" data-res="${c}:${t}:1" aria-label="One ${colorName(c)} ${name} more" ${n < RESERVE_MAX[t] ? '' : 'disabled'}>+</button></span>`;
+      };
+      const plural = t => { const n = window.Pieces.NAMES[LETTERS[t]]; return `${n[0].toUpperCase()}${n.slice(1)}s`; };
+      $('#eReserves').innerHTML = '<span></span><span class="ehead">White</span><span class="ehead">Black</span>' +
+        DROP_ORDER.map(t => `<span class="ehead">${plural(t)}</span>${stepper(WHITE, t)}${stepper(BLACK, t)}`).join('');
+
+      $$('#eSide input').forEach(i => (i.checked = i.value === colorKey(e.side)));
+      const v = this.validate();
+      $('#eError').hidden = !v.error;
+      $('#eError').textContent = v.error || '';
+      $('#eDone').disabled = !!v.error;
+
+      // Bars show only names while editing.
+      const bottom = this.flipped ? BLACK : WHITE;
+      for (const [id, c] of [['#aBarBottom', bottom], ['#aBarTop', bottom ^ 1]]) {
+        $(id).innerHTML = `<div class="avatar">${pieceSvg('K', colorKey(c))}</div><div><div class="pname">${colorName(c)}</div><div class="psub">${e.side === c ? 'To move' : ''}</div></div>`;
+        $(id).classList.toggle('to-move', e.side === c);
+      }
+      $('#aEval').hidden = true;
+      for (const b of $$('#aNav [data-astep]')) b.disabled = true;
+    },
+  };
+
+  function copyText(text, done) {
+    navigator.clipboard?.writeText(text).then(() => toast(done), () => toast(text));
+  }
+
   // --- dialogs ----------------------------------------------------------------------------
 
-  function openPveDialog() {
+  let pveFen = null; // a start position other than the usual one, from the analysis board
+  function openPveDialog(fen = null) {
     const dlg = $('#dlgPve');
+    pveFen = fen && fen !== START_FEN ? fen : null;
+    dlg.querySelector('h2').textContent = pveFen ? 'Play Stockhorse from this position' : 'Choose your opponent';
     const range = $('#strengthRange');
     range.min = STRENGTH.min;
     range.max = STRENGTH.max;
@@ -1434,7 +2066,7 @@
     const color = dlg.querySelector('input[name=color]:checked').value;
     store.set('sk.elo', elo);
     location.hash = '#/play';
-    play.start({ mode: 'pve', elo, color });
+    play.start({ mode: 'pve', elo, color, fen: pveFen });
   });
 
   let openGamesUnsub = null;
@@ -1509,7 +2141,8 @@
   // --- routing ----------------------------------------------------------------------------
 
   function showView(name) {
-    for (const v of ['home', 'play', 'review', 'rules']) $(`#view-${v}`).hidden = v !== name;
+    for (const v of ['home', 'play', 'review', 'analysis', 'rules']) $(`#view-${v}`).hidden = v !== name;
+    if (name !== 'analysis' && analysis.active) analysis.hide();
     $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === name || (name === 'play' && a.dataset.nav === 'home')));
   }
 
@@ -1528,6 +2161,9 @@
     } else if (h === '#/review') {
       showView('review');
       review.show();
+    } else if (h === '#/analysis') {
+      showView('analysis');
+      analysis.show();
     } else if (h === '#/rules') {
       showView('rules');
     } else {
@@ -1582,6 +2218,7 @@
 
     play.init();
     review.init();
+    analysis.init();
 
     $$('.mode-card').forEach(card => {
       card.onclick = () => {
@@ -1592,6 +2229,7 @@
           play.start({ mode: 'local' });
         } else if (m === 'online') openOnlineDialog();
         else if (m === 'review') location.hash = '#/review';
+        else if (m === 'analysis') location.hash = '#/analysis';
       };
     });
     document.addEventListener('click', e => {
