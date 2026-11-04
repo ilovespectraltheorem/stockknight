@@ -49,8 +49,8 @@
         </button>
         <button class="mode-card" data-mode="online" id="onlineCard">
           <span class="mode-icon" data-piece="Q"></span>
-          <span class="mode-title">Play a friend online</span>
-          <span class="mode-sub" id="onlineSub">Make a room and send the link. Moves are checked on the server.</span>
+          <span class="mode-title">Play online</span>
+          <span class="mode-sub" id="onlineSub">Quick pairing or an invite link, with clocks, draw offers and rematches.</span>
         </button>
         <button class="mode-card" data-mode="review">
           <span class="mode-icon" data-piece="B"></span>
@@ -88,6 +88,10 @@
           <div class="controls">
             <button class="btn" id="btnNew">New game</button>
             <button class="btn primary" id="btnReviewThis">Review this game</button>
+          </div>
+          <div class="online-box" id="onlineBox" hidden>
+            <p class="online-info" id="onlineInfo" hidden></p>
+            <div class="controls" id="onlineActions"></div>
           </div>
           <div class="share" id="sharePanel" hidden>
             <p id="shareText">Send this link to your opponent:</p>
@@ -203,22 +207,44 @@
 
   <dialog id="dlgOnline" class="dialog">
     <form method="dialog">
-      <h2>Play a friend online</h2>
+      <h2>Play online</h2>
+      <label class="field">Your name <input id="onlineName" maxlength="24" placeholder="Anonymous" autocomplete="nickname"></label>
+      <div id="tcWrap">
+        <h3>Time control</h3>
+        <div class="seg wrap" id="tcSeg">
+          <label><input type="radio" name="tc" value="60+0"><span>1 min</span></label>
+          <label><input type="radio" name="tc" value="180+2"><span>3 | 2</span></label>
+          <label><input type="radio" name="tc" value="300+0" checked><span>5 min</span></label>
+          <label><input type="radio" name="tc" value="600+5"><span>10 | 5</span></label>
+          <label><input type="radio" name="tc" value="900+10"><span>15 | 10</span></label>
+          <label><input type="radio" name="tc" value="none"><span>Untimed</span></label>
+        </div>
+      </div>
+      <div class="quick-row" id="quickWrap">
+        <button class="btn primary" value="quick">Quick pairing</button>
+        <span class="muted" id="quickNote">Plays the next person who picks the same time control.</span>
+      </div>
+      <h3>Invite a friend, playing as</h3>
+      <div class="quick-row">
+        <div class="seg">
+          <label><input type="radio" name="ocolor" value="w"><span>White</span></label>
+          <label><input type="radio" name="ocolor" value="random" checked><span>Random</span></label>
+          <label><input type="radio" name="ocolor" value="b"><span>Black</span></label>
+        </div>
+        <button class="btn" value="ok">Make an invite link</button>
+      </div>
       <div id="openGamesWrap" hidden>
-        <h3>Open games</h3>
+        <h3>Open challenges</h3>
         <ul class="open-games" id="openGames"><li class="muted">Looking for games…</li></ul>
+      </div>
+      <div id="liveGamesWrap" hidden>
+        <h3>Watch a game</h3>
+        <ul class="open-games" id="liveGames"></ul>
       </div>
       <h3>Join with a code</h3>
       <div class="share-row"><input id="joinCode" placeholder="e.g. k7pm2x" autocomplete="off" maxlength="12"><button class="btn" value="code">Join</button></div>
-      <h3>Or make a new game, playing as</h3>
-      <div class="seg">
-        <label><input type="radio" name="ocolor" value="w" checked><span>White</span></label>
-        <label><input type="radio" name="ocolor" value="random"><span>Random</span></label>
-        <label><input type="radio" name="ocolor" value="b"><span>Black</span></label>
-      </div>
       <div class="dialog-actions">
-        <button class="btn" value="cancel">Cancel</button>
-        <button class="btn primary" value="ok">Make a game</button>
+        <button class="btn" value="cancel">Close</button>
       </div>
     </form>
   </dialog>
