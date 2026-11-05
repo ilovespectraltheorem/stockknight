@@ -1433,9 +1433,17 @@
     editing: null, // { board, hand, side, tool } while setting up a position
     eng: null,
     active: false,
+    tb: null, // the endgame table's answer for a lone-piece ending: { node, r } or { node, pending }
+    tbEng: null,
+    tbRun: 0,
 
     engine() {
       return this.eng || (this.eng = new EngineClient());
+    },
+
+    // A worker of its own, so solved endgame tables stay in memory while the search restarts.
+    tbEngine() {
+      return this.tbEng || (this.tbEng = new EngineClient());
     },
 
     init() {
@@ -1502,6 +1510,15 @@
         copyText(text, 'Moves copied');
       };
       $('#aPlayHere').onclick = () => openPveDialog(this.tree.position(this.cur).fen());
+      $('#aLesson').onchange = () => {
+        const fen = $('#aLesson').value;
+        $('#aLesson').value = '';
+        if (fen) this.load(fen);
+      };
+      $('#aTb').addEventListener('click', e => {
+        const b = e.target.closest('[data-tbmove]');
+        if (b) this.play(b.dataset.tbmove);
+      });
 
       // The position editor.
       $('#ePalette').addEventListener('click', e => {
@@ -1669,6 +1686,7 @@
       const run = this.runId;
       this.result = null;
       const pos = this.tree.position(this.cur);
+      this.runTb(pos);
       if (!this.engineOn || this.editing || !this.active || pos.status().state !== 'ongoing') return this.renderEngine(pos);
       const eng = this.engine();
       const node = this.cur, fen = this.tree.fen, moves = this.tree.path(node);
@@ -1695,6 +1713,68 @@
       this.renderArrows(pos);
     },
 
+    // --- endgame table (web/endgame.js): exact results for king and minor pieces v bare king ---
+
+    async runTb(pos) {
+      const id = ++this.tbRun;
+      const E = window.Endgame;
+      if (this.editing || !this.active || !E || !E.supports(pos) || pos.status().state !== 'ongoing') {
+        this.tb = null;
+        return this.renderTb();
+      }
+      const node = this.cur;
+      this.tb = { node, pending: true };
+      this.renderTb();
+      let r;
+      try {
+        r = await this.tbEngine().call('tablebase', { fen: this.tree.fen, moves: this.tree.path(node) });
+      } catch {
+        return;
+      }
+      if (id !== this.tbRun) return;
+      this.tb = r ? { node, r } : null;
+      this.renderTb();
+      this.renderArrows(pos);
+    },
+
+    renderTb() {
+      const box = $('#aTb');
+      const t = this.tb;
+      if (!t || t.node !== this.cur || this.editing) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      const head = sig => `<div class="tb-head"><b>Endgame table</b><span class="muted">${sig ? esc(sig.replace('v', ' v ')) : ''}</span></div>`;
+      if (t.pending) {
+        box.innerHTML = `${head('')}<div class="tb-sum muted">Solving this ending exactly <span class="thinking"><i></i><i></i><i></i></span></div>`;
+        return;
+      }
+      const r = t.r;
+      const pos = this.tree.position(this.cur);
+      const strong = colorName(r.strong);
+      const moves = n => `${n} move${n === 1 ? '' : 's'}`;
+      let sum;
+      if (r.result === 'draw') sum = `Draw with best play: ${colorName(r.strong ^ 1)} wins material and is left with bare kings.`;
+      else {
+        const winner = r.result === 'win' ? pos.side : pos.side ^ 1;
+        sum = `${colorName(winner)} wins: ${colorName(winner ^ 1)} has no legal move after ${moves(Math.ceil(r.plies / 2))} by ${colorName(winner)}, with best play.`;
+      }
+      const notes = {
+        KBvK: `A lone bishop can never checkmate. ${strong} wins by leaving the bare king without a move (stalemate loses), usually in a corner of the colour the bishop does not move on.`,
+        KNvK: `A lone knight can never checkmate. ${strong} wins by stalemating the bare king in a corner, as long as the knight is not trapped.`,
+        KNNvK: `Two knights can checkmate, but cannot force it: the bare king can always step away from a mate. ${strong} wins by stalemate instead.`,
+      };
+      const note = notes[r.sig] || 'The game ends when a side has no legal move: checkmate or stalemate.';
+      const label = m => (m.result === 'draw' ? 'Draw' : `${m.result === 'win' ? 'Wins' : 'Loses'} in ${m.plies}`);
+      const list = r.moves.map(m => {
+        const mv = pos.moveFromUci(m.uci);
+        return `<button class="tb-move ${m.result}" data-tbmove="${esc(m.uci)}"><span>${esc(mv ? pos.moveToText(mv) : m.uci)}</span><span class="tb-val">${esc(label(m))}</span></button>`;
+      }).join('');
+      box.innerHTML = `${head(r.sig)}<div class="tb-sum">${esc(sum)}</div><p class="tb-note muted">${esc(note)} <a href="#/rules">Why?</a></p>
+        <div class="tb-moves">${list}</div><p class="tb-note muted">Each move's value counts plies (single moves by either side) to the end of the game, for the side playing it.</p>`;
+    },
+
     // --- rendering ---
 
     render() {
@@ -1708,6 +1788,7 @@
       this.renderStatus(pos);
       this.renderTree();
       this.renderEngine(pos);
+      this.renderTb();
       const fenEl = $('#aFen');
       if (document.activeElement !== fenEl) fenEl.value = pos.fen();
       $('#aFenError').hidden = true;
@@ -1722,6 +1803,12 @@
     },
 
     arrows(pos) {
+      // In a lone-piece ending the table's best moves are exact, so they get the arrows.
+      const t = this.tb && this.tb.r && this.tb.node === this.cur ? this.tb.r : null;
+      if (t && t.moves.length) {
+        const best = t.moves.filter(m => m.result === t.moves[0].result && m.plies === t.moves[0].plies).slice(0, 3);
+        return best.map((m, i) => ({ move: pos.moveFromUci(m.uci), color: LINE_COLORS[i] })).filter(a => a.move).reverse();
+      }
       const r = this.result;
       if (!this.engineOn || !r || r.node !== this.cur) return [];
       return r.lines.slice(0, 3).map((l, i) => ({ move: pos.moveFromUci(l.move), color: LINE_COLORS[i] })).filter(a => a.move).reverse();

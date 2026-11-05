@@ -1,6 +1,6 @@
 'use strict';
 // Runs the reference engine off the page's main thread so the board stays responsive.
-importScripts('../reference/engine.js', 'engine-tasks.js');
+importScripts('../reference/engine.js', 'endgame.js', 'engine-tasks.js');
 
 self.onmessage = e => {
   const { id, cmd, args } = e.data;

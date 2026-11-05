@@ -10,9 +10,10 @@ const read = rel => fs.readFileSync(path.join(here, rel), 'utf8');
 const safe = js => js.replace(/<\/script/gi, '<\\/script');
 
 const engine = read('../reference/engine.js');
+const endgame = read('endgame.js');
 const tasks = read('engine-tasks.js');
 const worker = read('engine-worker.js').replace(/^importScripts\(.*\);$/m, '');
-const workerSrc = `${engine}\n${tasks}\n${worker}`;
+const workerSrc = `${engine}\n${endgame}\n${tasks}\n${worker}`;
 
 let html = read('index.html');
 html = html.replace(/\s*<link rel="icon"[^>]*>/, '');
