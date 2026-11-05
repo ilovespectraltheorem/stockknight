@@ -137,6 +137,77 @@ test('lines from a set-up position: a mate in one, a lone legal move, and no mov
   assert.equal(T.lines({ fen: mateFen, moves: [], movetime: 100, depth: 2, multipv: 999 }).lines.length, Math.min(few, 999));
 });
 
+const E = require('./endgame.js');
+
+test('endgame tables: a lone bishop or knight never mates, two knights cannot force mate', () => {
+  const B = E.report([SK.BISHOP]), N = E.report([SK.KNIGHT]), NN = E.report([SK.KNIGHT, SK.KNIGHT]);
+  // With the strong side to move: bishop always wins, knight wins unless it is trapped.
+  assert.deepEqual([B.draw, B.longestWin, B.checkmates], [0, 39, 0]);
+  assert.deepEqual([N.draw, N.longestWin, N.checkmates], [168, 65, 0]);
+  assert.deepEqual([NN.draw, NN.longestWin], [0, 57]);
+  assert.ok(B.stalemates > 0 && N.stalemates > 0 && NN.checkmates > 0);
+  // Playing for checkmate only (a stalemated bare king counts as a draw), two knights win only
+  // where a mate in one is already on the board, and the bare king loses only when mated.
+  const NNm = E.report([SK.KNIGHT, SK.KNIGHT], 'checkmate');
+  assert.equal(NNm.longestWin, 1);
+  assert.equal(NNm.defenderLosses, NNm.checkmates);
+});
+
+test('endgame probe matches sk-tb and the engine', () => {
+  // Results from `sk-tb probe` (crates/tb), for both colours as the strong side.
+  const known = [
+    ['6/6/2k3/B5/4K1/6[-] b 0 1', 'loss', 36], ['6/4B1/6/4K1/2k3/6[-] b 0 1', 'loss', 26],
+    ['2k3/6/6/4K1/6/4N1[-] b 0 1', 'loss', 50], ['6/6/2k3/K5/6/N5[-] b 0 1', 'loss', 56],
+    ['6/k5/2N3/4K1/6/4N1[-] b 0 1', 'loss', 16], ['6/4N1/2k3/K5/6/N5[-] b 0 1', 'loss', 24],
+    ['2K3/4N1/6/Bk4/6/6[-] b 0 1', 'loss', 50], ['2B3/6/2K3/6/2B3/k5[-] b 0 1', 'loss', 8],
+    ['6/6/6/6/5B/K1k3[-] w 0 1', 'win', 39], ['5N/6/6/2k3/6/K5[-] w 0 1', 'win', 65],
+    ['6/6/6/2NN2/2k3/K5[-] w 0 1', 'win', 57], ['k5/2B3/1K4/6/6/6[-] b 0 1', 'loss', 0],
+  ];
+  for (const [fen, result, plies] of known) {
+    const r = E.probe(new SK.Position(fen));
+    assert.deepEqual([r.result, r.plies], [result, plies], fen);
+    // The same position with colours swapped and the board turned over.
+    const swapped = new SK.Position(fen.replace(/^[^\[]+/, b => b.split('/').reverse().join('/').replace(/[a-z]/gi, c => (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()))).replace(/ ([wb]) /, (_, s) => ` ${s === 'w' ? 'b' : 'w'} `));
+    const q = E.probe(swapped);
+    assert.deepEqual([q.result, q.plies], [result, plies], `swapped ${fen}`);
+  }
+  // Each position's value follows from its moves, which come from the reference engine.
+  let seed = 7;
+  const rnd = n => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) % n);
+  let checked = 0;
+  while (checked < 300) {
+    const sqs = [];
+    while (sqs.length < 4) { const s = rnd(36); if (!sqs.includes(s)) sqs.push(s); }
+    const fenBoard = [];
+    const at = new Map([[sqs[0], 'K'], [sqs[1], 'k'], [sqs[2], 'NB'[rnd(2)]], [sqs[3], rnd(2) ? 'NB'[rnd(2)] : null]]);
+    for (let r = 5; r >= 0; r--) {
+      let row = '', e = 0;
+      for (let f = 0; f < 6; f++) {
+        const c = at.get(r * 6 + f);
+        if (c) { if (e) row += e; e = 0; row += c; } else e++;
+      }
+      fenBoard.push(row + (e || ''));
+    }
+    let p;
+    try { p = new SK.Position(`${fenBoard.join('/')}[-] ${rnd(2) ? 'w' : 'b'} 0 1`); } catch { continue; }
+    if (Math.abs((sqs[0] % 6) - (sqs[1] % 6)) <= 1 && Math.abs(Math.floor(sqs[0] / 6) - Math.floor(sqs[1] / 6)) <= 1) continue;
+    const r = E.probe(p);
+    assert.ok(r, p.fen());
+    assert.equal(r.moves.length, p.legalMoves().length);
+    const wins = r.moves.filter(m => m.result === 'win'), draws = r.moves.filter(m => m.result === 'draw');
+    if (r.result === 'win') assert.equal(r.plies, Math.min(...wins.map(m => m.plies)), p.fen());
+    else if (r.result === 'draw') assert.ok(!wins.length && draws.length, p.fen());
+    else if (r.moves.length) assert.equal(r.plies, Math.max(...r.moves.map(m => m.plies)), p.fen());
+    else assert.equal(r.plies, 0);
+    checked++;
+  }
+  // Anything else is not a lone-piece ending.
+  assert.equal(E.probe(new SK.Position(SK.START_FEN)), null);
+  assert.equal(E.probe(new SK.Position('6/6/6/6/2R3/K1k3[-] b 0 1')), null);
+  assert.equal(E.probe(new SK.Position('6/6/6/6/2N3/K1k3[B] b 0 1')), null);
+  assert.equal(T.tablebase({ fen: '6/6/6/6/5B/K1k3[-] w 0 1', moves: ['f2d4'] }).result, 'loss');
+});
+
 test('move tree: lines, variations, promotion, deletion and storage', () => {
   const t = new MoveTree();
   const a = t.addLine(0, ['b2b3', 'c5c4', 'a2a3']);

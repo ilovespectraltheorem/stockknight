@@ -182,6 +182,7 @@
 
         <aside class="panel" id="aPanel">
           <div class="status" id="aStatus"></div>
+          <div class="tb" id="aTb" hidden></div>
           <div class="engine" id="aEngine">
             <div class="engine-head">
               <label class="switch" title="Stockhorse analysis on or off">
@@ -214,6 +215,12 @@
             <button class="btn" id="aSetup">Set up position</button>
             <button class="btn" id="aReset" title="Clear the moves and start from the starting position">Starting position</button>
             <button class="btn" id="aCopyLine" title="Copy the moves from the first position to this one">Copy moves</button>
+            <select class="btn" id="aLesson" title="Set up a lone-piece ending to practise, with the exact result of every move">
+              <option value="">Lone-piece endings…</option>
+              <option value="6/6/6/6/5B/K1k3[-] w 0 1">King and bishop v king</option>
+              <option value="5N/6/6/2k3/6/K5[-] w 0 1">King and knight v king</option>
+              <option value="6/6/6/2NN2/2k3/K5[-] w 0 1">King and two knights v king</option>
+            </select>
             <button class="btn primary" id="aPlayHere" title="Play Stockhorse from this position">Play from here</button>
           </div>
         </aside>
@@ -270,6 +277,13 @@
         <ul>
           <li>If you have no legal move, you lose. Checkmate <i>and</i> stalemate both lose.</li>
           <li>Draws: the same position three times, or bare kings with empty reserves.</li>
+        </ul>
+        <h3>A king and one or two minor pieces against a bare king</h3>
+        <ul>
+          <li>A lone <b>bishop</b> or a lone <b>knight</b> can never give checkmate: the piece that gives check never guards the squares directly beside the king (up, down, left and right), and the other king cannot guard all of those without standing next to it.</li>
+          <li><b>Two knights</b> can checkmate, but cannot force it: the bare king can always step away from a mate.</li>
+          <li>All three still win, because stalemate loses. With the stronger side to move, king and bishop always win (at most 20 moves), king and knight win unless the knight is already trapped (at most 33 moves), and king and two knights always win (at most 29 moves).</li>
+          <li>The analysis board knows every such position exactly: set one up, or pick one from <b>Lone-piece endings</b>, to see the result of every move.</li>
         </ul>
         <p class="muted">To drop, click a piece in your reserve (beside the board) and then an empty square.</p>
       </article>
@@ -372,6 +386,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="../reference/engine.js"></script>
+  <script src="endgame.js"></script>
   <script src="engine-tasks.js"></script>
   <script src="review.js"></script>
   <script src="tree.js"></script>

@@ -270,7 +270,15 @@
     };
   }
 
-  const api = { LEVELS, STRENGTH, settingFor, clampElo, thinkAt, play, analyse, lines, build };
+  // The exact result of a lone-piece ending (king and one or two bishops or knights against a
+  // bare king) and of every legal move in it, from web/endgame.js; null for any other position.
+  // The first probe of a material solves its table, a few seconds for two pieces.
+  function tablebase({ fen, moves }) {
+    const E = root.Endgame || (typeof require === 'function' ? require('./endgame.js') : null);
+    return E ? E.probe(build(fen, moves)) : null;
+  }
+
+  const api = { LEVELS, STRENGTH, settingFor, clampElo, thinkAt, play, analyse, lines, tablebase, build };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EngineTasks = api;
 })(typeof self !== 'undefined' ? self : globalThis);
