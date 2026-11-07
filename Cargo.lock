@@ -50,6 +50,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sk-pv"
+version = "0.1.0"
+dependencies = [
+ "sk-core",
+ "sk-data",
+ "sk-eval",
+ "sk-nnue",
+ "sk-search",
+]
+
+[[package]]
 name = "sk-search"
 version = "0.1.0"
 dependencies = [

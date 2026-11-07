@@ -1,0 +1,12 @@
+[package]
+name = "sk-pv"
+version.workspace = true
+edition.workspace = true
+description = "Empirical piece values from a network: removal and reserve deltas over recorded positions"
+
+[dependencies]
+sk-core = { path = "../core" }
+sk-data = { path = "../data" }
+sk-nnue = { path = "../nnue" }
+sk-search = { path = "../search" }
+sk-eval = { path = "../eval" }
