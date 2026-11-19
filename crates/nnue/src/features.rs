@@ -68,6 +68,23 @@ pub fn active_features(pos: &Position, perspective: u8) -> Vec<u32> {
     out
 }
 
+/// Pieces in the game besides the kings, on the board and in reserve. Captured pieces leave
+/// the game, so this only goes down: 30 at the start.
+pub fn material_count(pos: &Position) -> usize {
+    let board = pos
+        .board
+        .iter()
+        .filter(|&&c| c != 0 && type_of(c) != KING)
+        .count();
+    let hand: usize = pos.hand.iter().flatten().map(|&n| n as usize).sum();
+    board + hand
+}
+
+/// The output bucket (layer stack) for `pos` among `buckets`: equal slices of 0..=30 pieces.
+pub fn bucket(pos: &Position, buckets: usize) -> usize {
+    (material_count(pos) * buckets / 31).min(buckets - 1)
+}
+
 /// The 180°-rotated, colour-swapped position (side to move swapped too).
 pub fn mirror(pos: &Position) -> Position {
     let mut rows = Vec::new();

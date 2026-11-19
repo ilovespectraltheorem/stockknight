@@ -10,6 +10,18 @@ centipawns = output × output_scale (600)
 
 Clipped ReLU is `clamp(x, 0, 1)`.
 
+**Output buckets and psqt** (`training.buckets` above 1, as in Stockfish's networks): the
+layers after the accumulator exist once per bucket, and a position uses the bucket of its
+material: pieces besides the kings, on the board and in reserve (30 at the start; captures
+only lower it), split into equal slices of 0..=30. Every input also has a psqt weight per
+bucket, and half the difference of the two perspectives' psqt sums is added straight to the
+output, a learned material and placement term that bypasses the clipped layers. With four
+buckets the stacks are about 4·(512·32 + 32·32 + 32) weights more, and search speed is nearly
+unchanged: a position still runs one stack, and the psqt sums ride in the accumulator.
+
+A single-bucket network of the same widths can seed a bucketed one (`--init-from`): its stack
+is copied into every bucket and psqt starts at zero, so training starts from exactly its play.
+
 ## Inputs (per perspective)
 
 - **Board, 14,256** = 36 king squares × 11 piece kinds × 36 squares:
@@ -25,10 +37,12 @@ two agree.
 
 ## `.nnue` file
 
-`SKNN` magic, version 1, input count, accumulator size, the two hidden sizes, the output scale,
-a description that starts with the ruleset id (`knightchess-2`; other rulesets are refused),
-then all weights as little-endian float32: feature transformer `[inputs][ft]` and bias, hidden
-layers `[out][in]` and biases, output weights and bias. 256-32-32 networks are about 15 MB.
+`SKNN` magic, version 2, input count, accumulator size, the two hidden sizes, the bucket
+count, the output scale, a description that starts with the ruleset id (`knightchess-2`;
+other rulesets are refused), then all weights as little-endian float32: feature transformer
+`[inputs][ft]` and bias, psqt `[inputs][buckets]`, then per bucket the hidden layers
+`[out][in]` and biases, output weights and bias. Version 1 files (one bucket, no psqt, no
+bucket count in the header) still load and play exactly as before. 256-32-32 networks are about 15 MB.
 
 ## Training (`python -m skpy.train`)
 

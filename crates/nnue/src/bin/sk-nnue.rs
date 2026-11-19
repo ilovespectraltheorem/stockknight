@@ -42,16 +42,17 @@ fn main() {
         Some("info") => {
             let net = Network::load(&arg(1)).unwrap_or_else(|e| fail(e));
             println!(
-                "inputs {} ft {} l1 {} l2 {} output_scale {}",
-                net.inputs, net.ft, net.l1, net.l2, net.output_scale
+                "inputs {} ft {} l1 {} l2 {} buckets {} output_scale {}",
+                net.inputs, net.ft, net.l1, net.l2, net.buckets, net.output_scale
             );
             println!("description {}", net.description);
         }
         Some("random") => {
-            let net = Network::random(
+            let net = Network::random_buckets(
                 opt(&args, "--ft", 256),
                 opt(&args, "--l1", 32),
                 opt(&args, "--l2", 32),
+                opt(&args, "--buckets", 1),
                 opt(&args, "--seed", 1) as u64,
             );
             net.save(&arg(1)).unwrap_or_else(|e| fail(e));
@@ -81,8 +82,13 @@ fn main() {
             let net = Network::load(&arg(1)).unwrap_or_else(|e| fail(e));
             let q = QuantNet::from_network(&net).unwrap_or_else(|e| fail(e));
             println!(
-                "shifts: ft {} l1 {} l2 {} out {}  (avx2 {})",
-                q.ft_shift, q.l1_shift, q.l2_shift, q.out_shift, q.simd
+                "shifts: ft {} l1 {:?} l2 {:?} out {:?}  psqt scale {}  (avx2 {})",
+                q.ft_shift,
+                q.stacks.iter().map(|s| s.l1_shift).collect::<Vec<_>>(),
+                q.stacks.iter().map(|s| s.l2_shift).collect::<Vec<_>>(),
+                q.stacks.iter().map(|s| s.out_shift).collect::<Vec<_>>(),
+                q.psqt_scale,
+                q.simd
             );
             let mut eval = QuantEval::new(q);
             let n = opt(&args, "--n", 100_000);
@@ -96,11 +102,11 @@ fn main() {
                     .unwrap_or_else(|e| fail(e))
                     .position()
                     .unwrap_or_else(|e| fail(e));
-                let shift = eval.net.ft_shift;
+                let (shift, ft, aw) = (eval.net.ft_shift, eval.net.ft, eval.net.acc_w);
                 let acts: Vec<bool> = eval
                     .accumulators(&pos)
-                    .iter()
-                    .map(|&a| a >> shift > 0)
+                    .chunks(aw)
+                    .flat_map(|c| c[..ft].iter().map(|&a| a >> shift > 0).collect::<Vec<_>>())
                     .collect();
                 active += acts.iter().filter(|&&a| a).count();
                 groups += acts.chunks(4).filter(|g| g.iter().any(|&a| a)).count();
@@ -128,7 +134,7 @@ fn main() {
             let pos = sk_core::Position::startpos();
             let mut acc = q.accumulate(&active_features(&pos, 0));
             acc.extend(q.accumulate(&active_features(&pos, 1)));
-            let ft = q.ft;
+            let ft = q.acc_w;
             for (simd, vnni) in [(true, true), (true, false), (false, false)] {
                 if simd && !sk_nnue::simd_available() || vnni && !sk_nnue::vnni_available() {
                     continue;
@@ -140,7 +146,7 @@ fn main() {
                 let mut x = 0i64;
                 for i in 0..n {
                     acc[(i % 7) as usize] ^= 1;
-                    x += q.propagate(&acc[..ft], &acc[ft..]) as i64;
+                    x += q.propagate(&acc[..ft], &acc[ft..], 0) as i64;
                 }
                 let prop = t.elapsed().as_nanos() as f64 / n as f64;
                 let t = std::time::Instant::now();

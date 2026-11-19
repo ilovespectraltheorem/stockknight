@@ -27,6 +27,7 @@ record_quiet_limit = 40
 val_fraction = 0.01
 
 [training]
+buckets = 4
 window_rounds = 2
 window_positions = 0
 init = "teacher"

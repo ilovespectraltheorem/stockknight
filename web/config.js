@@ -5,5 +5,5 @@
 (typeof self !== 'undefined' ? self : globalThis).MAKI_CONFIG = {
   server: '',
   wasm: 'engine/stockhorse.wasm',
-  net: 'nets/g21.nnue',
+  net: 'nets/g25.nnue',
 };

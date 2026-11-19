@@ -13,7 +13,7 @@ BOARD_FEATURES = 36 * 11 * 36
 NUM_FEATURES = BOARD_FEATURES + 10
 PAD = NUM_FEATURES  # index of an all-zero row: inactive slots
 MAGIC = b"SKNN"
-VERSION = 1
+VERSION = 2
 
 
 def batch_torch(raw: torch.Tensor):
@@ -63,27 +63,79 @@ def batch_torch(raw: torch.Tensor):
     return stm, other, score, result
 
 
+def bucket_torch(raw: torch.Tensor, buckets: int) -> torch.Tensor:
+    """Output bucket per record, as `features::bucket` in Rust: pieces besides the kings, on the
+    board and in reserve (30 at the start), in `buckets` equal slices of 0..=30."""
+    raw = raw.long()
+    n = raw.shape[0]
+    b = raw[:, :18]
+    codes = torch.stack([b & 15, b >> 4], dim=2).reshape(n, 36)
+    board = ((codes != 0) & ((codes & 7) != 6)).sum(1)
+    hand = raw[:, 18]
+    total = board
+    for c in (0, 1):
+        bits = (hand >> (4 * c)) & 15
+        total = total + (bits & 3) + ((bits >> 2) & 1) + ((bits >> 3) & 1)
+    return (total * buckets // 31).clamp(max=buckets - 1)
+
+
 class SkNet(nn.Module):
-    def __init__(self, ft=256, l1=32, l2=32, output_scale=600.0):
+    """Feature transformer, psqt weights and one layer stack per output bucket. Stacks are kept
+    as single wide layers whose rows are grouped by bucket (`[bucket][out][in]`, the file
+    order); each position uses its own bucket's slice."""
+
+    def __init__(self, ft=256, l1=32, l2=32, output_scale=600.0, buckets=1):
         super().__init__()
         self.ft_size, self.l1_size, self.l2_size, self.output_scale = ft, l1, l2, output_scale
+        self.buckets = buckets
         self.ft = nn.Embedding(NUM_FEATURES + 1, ft, padding_idx=PAD)
         self.ft_b = nn.Parameter(torch.full((ft,), 0.25))
-        self.l1 = nn.Linear(2 * ft, l1)
-        self.l2 = nn.Linear(l1, l2)
-        self.out = nn.Linear(l2, 1)
+        self.psqt = nn.Embedding(NUM_FEATURES + 1, buckets, padding_idx=PAD)
+        self.l1 = nn.Linear(2 * ft, l1 * buckets)
+        self.l2 = nn.Linear(l1, l2 * buckets)
+        self.out = nn.Linear(l2, buckets)
         with torch.no_grad():
             self.ft.weight.normal_(0, 0.02)
             self.ft.weight[PAD].zero_()
+            self.psqt.weight.zero_()
 
     def accumulate(self, idx):
         return self.ft(idx).sum(1) + self.ft_b
 
-    def forward(self, stm_idx, other_idx):
+    @staticmethod
+    def _pick(y, bucket, width):
+        """Bucket `bucket[i]`'s `width` outputs of row i of `y` (N, buckets·width)."""
+        y = y.view(y.shape[0], -1, width)
+        return y.gather(1, bucket.view(-1, 1, 1).expand(-1, 1, width))[:, 0]
+
+    def forward(self, stm_idx, other_idx, bucket=None):
+        if bucket is None:
+            bucket = torch.zeros(stm_idx.shape[0], dtype=torch.long, device=stm_idx.device)
         x = torch.cat([self.accumulate(stm_idx), self.accumulate(other_idx)], 1).clamp(0, 1)
-        h1 = self.l1(x).clamp(0, 1)
-        h2 = self.l2(h1).clamp(0, 1)
-        return self.out(h2)[:, 0]
+        h1 = self._pick(self.l1(x), bucket, self.l1_size).clamp(0, 1)
+        h2 = self._pick(self.l2(h1), bucket, self.l2_size).clamp(0, 1)
+        out = self._pick(self.out(h2), bucket, 1)[:, 0]
+        if self.buckets > 1:
+            ps = self.psqt(stm_idx).sum(1).gather(1, bucket[:, None])[:, 0]
+            po = self.psqt(other_idx).sum(1).gather(1, bucket[:, None])[:, 0]
+            out = out + (ps - po) / 2
+        return out
+
+    def expand_from(self, src: "SkNet"):
+        """Start from a single-bucket network of the same widths: its feature transformer and a
+        copy of its layer stack in every bucket, psqt zero. Gives the same outputs as `src`."""
+        if (src.ft_size, src.l1_size, src.l2_size, src.buckets) != (self.ft_size, self.l1_size, self.l2_size, 1):
+            raise ValueError("expand_from needs a single-bucket network of the same widths")
+        with torch.no_grad():
+            self.ft.weight.copy_(src.ft.weight)
+            self.ft_b.copy_(src.ft_b)
+            self.psqt.weight.zero_()
+            self.l1.weight.copy_(src.l1.weight.repeat(self.buckets, 1))
+            self.l1.bias.copy_(src.l1.bias.repeat(self.buckets))
+            self.l2.weight.copy_(src.l2.weight.repeat(self.buckets, 1))
+            self.l2.bias.copy_(src.l2.bias.repeat(self.buckets))
+            self.out.weight.copy_(src.out.weight.repeat(self.buckets, 1))
+            self.out.bias.copy_(src.out.bias.repeat(self.buckets))
 
     def clamp_hidden(self, limit=127 / 64):
         """Keep hidden weights within what the int16 quantization can hold."""
@@ -95,18 +147,19 @@ class SkNet(nn.Module):
 def save_nnue(net: SkNet, path, description=""):
     desc = f"{RULESET} {description}".strip().encode()
     with torch.no_grad():
-        parts = [
-            net.ft.weight[:NUM_FEATURES],
-            net.ft_b,
-            net.l1.weight,
-            net.l1.bias,
-            net.l2.weight,
-            net.l2.bias,
-            net.out.weight.reshape(-1),
-            net.out.bias,
-        ]
+        B, l1, l2 = net.buckets, net.l1_size, net.l2_size
+        parts = [net.ft.weight[:NUM_FEATURES], net.ft_b, net.psqt.weight[:NUM_FEATURES]]
+        for b in range(B):
+            parts += [
+                net.l1.weight[b * l1:(b + 1) * l1],
+                net.l1.bias[b * l1:(b + 1) * l1],
+                net.l2.weight[b * l2:(b + 1) * l2],
+                net.l2.bias[b * l2:(b + 1) * l2],
+                net.out.weight[b],
+                net.out.bias[b:b + 1],
+            ]
         weights = np.concatenate([p.detach().cpu().float().numpy().reshape(-1) for p in parts]).astype("<f4")
-    header = MAGIC + struct.pack("<5I", VERSION, NUM_FEATURES, net.ft_size, net.l1_size, net.l2_size)
+    header = MAGIC + struct.pack("<6I", VERSION, NUM_FEATURES, net.ft_size, net.l1_size, net.l2_size, net.buckets)
     header += struct.pack("<f", net.output_scale) + struct.pack("<I", len(desc)) + desc
     tmp = f"{path}.tmp"
     with open(tmp, "wb") as f:
@@ -122,24 +175,38 @@ def load_nnue(path) -> SkNet:
     if data[:4] != MAGIC:
         raise ValueError(f"{path}: not a StockKnight network")
     version, inputs, ft, l1, l2 = struct.unpack_from("<5I", data, 4)
-    if version != VERSION or inputs != NUM_FEATURES:
+    if version not in (1, 2) or inputs != NUM_FEATURES:
         raise ValueError(f"{path}: unsupported network (version {version}, {inputs} inputs)")
-    (scale,) = struct.unpack_from("<f", data, 24)
-    (dlen,) = struct.unpack_from("<I", data, 28)
-    w = np.frombuffer(data, dtype="<f4", offset=32 + dlen)
-    net = SkNet(ft, l1, l2, scale)
-    sizes = [inputs * ft, ft, l1 * 2 * ft, l1, l2 * l1, l2, l2, 1]
+    at = 24
+    B = 1
+    if version >= 2:
+        (B,) = struct.unpack_from("<I", data, at)
+        at += 4
+    (scale,) = struct.unpack_from("<f", data, at)
+    (dlen,) = struct.unpack_from("<I", data, at + 4)
+    w = np.frombuffer(data, dtype="<f4", offset=at + 8 + dlen)
+    net = SkNet(ft, l1, l2, scale, B)
+    sizes = [inputs * ft, ft] + ([inputs * B] if version >= 2 else [])
+    sizes += [l1 * 2 * ft, l1, l2 * l1, l2, l2, 1] * B
     chunks = np.split(w, np.cumsum(sizes)[:-1])
+    t = lambda a, *shape: torch.from_numpy(a.reshape(*shape).copy())
     with torch.no_grad():
-        net.ft.weight[:NUM_FEATURES] = torch.from_numpy(chunks[0].reshape(inputs, ft).copy())
+        net.ft.weight[:NUM_FEATURES] = t(chunks[0], inputs, ft)
         net.ft.weight[PAD].zero_()
-        net.ft_b.copy_(torch.from_numpy(chunks[1].copy()))
-        net.l1.weight.copy_(torch.from_numpy(chunks[2].reshape(l1, 2 * ft).copy()))
-        net.l1.bias.copy_(torch.from_numpy(chunks[3].copy()))
-        net.l2.weight.copy_(torch.from_numpy(chunks[4].reshape(l2, l1).copy()))
-        net.l2.bias.copy_(torch.from_numpy(chunks[5].copy()))
-        net.out.weight.copy_(torch.from_numpy(chunks[6].reshape(1, l2).copy()))
-        net.out.bias.copy_(torch.from_numpy(chunks[7].copy()))
+        net.ft_b.copy_(t(chunks[1], ft))
+        i = 2
+        if version >= 2:
+            net.psqt.weight[:NUM_FEATURES] = t(chunks[2], inputs, B)
+            net.psqt.weight[PAD].zero_()
+            i = 3
+        for b in range(B):
+            c = chunks[i + 6 * b: i + 6 * b + 6]
+            net.l1.weight[b * l1:(b + 1) * l1] = t(c[0], l1, 2 * ft)
+            net.l1.bias[b * l1:(b + 1) * l1] = t(c[1], l1)
+            net.l2.weight[b * l2:(b + 1) * l2] = t(c[2], l2, l1)
+            net.l2.bias[b * l2:(b + 1) * l2] = t(c[3], l2)
+            net.out.weight[b] = t(c[4], l2)
+            net.out.bias[b] = float(c[5][0])
     return net
 
 

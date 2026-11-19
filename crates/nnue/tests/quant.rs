@@ -9,8 +9,9 @@ use sk_nnue::{
 };
 use sk_search::{Limits, Searcher};
 
+/// Four buckets with psqt weights, so the bucket and psqt paths are covered too.
 fn net() -> Network {
-    Network::random(256, 32, 32, 3)
+    Network::random_buckets(256, 32, 32, 4, 3)
 }
 
 fn scratch(q: &QuantNet, pos: &Position) -> Vec<i16> {
@@ -96,10 +97,12 @@ fn avx2_equals_portable() {
         pos.make_move(moves[rng.next(moves.len())]);
         let (a, b) = (scratch(&fast, &pos), scratch(&slow, &pos));
         assert_eq!(a, b);
-        let ft = fast.ft;
-        let out = slow.propagate(&a[..ft], &a[ft..]);
-        assert_eq!(fast.propagate(&a[..ft], &a[ft..]), out);
-        assert_eq!(vnni.propagate(&a[..ft], &a[ft..]), out);
+        let ft = fast.acc_w;
+        for bucket in 0..fast.buckets {
+            let out = slow.propagate(&a[..ft], &a[ft..], bucket);
+            assert_eq!(fast.propagate(&a[..ft], &a[ft..], bucket), out);
+            assert_eq!(vnni.propagate(&a[..ft], &a[ft..], bucket), out);
+        }
     }
 }
 
@@ -131,12 +134,12 @@ struct Scratch(QuantNet);
 impl Evaluator for Scratch {
     fn evaluate(&mut self, pos: &Position) -> i32 {
         let acc = scratch(&self.0, pos);
-        let ft = self.0.ft;
-        let (w, b) = acc.split_at(ft);
+        let (w, b) = acc.split_at(self.0.acc_w);
+        let bucket = sk_nnue::features::bucket(pos, self.0.buckets);
         if pos.side == WHITE {
-            self.0.evaluate_cp(w, b)
+            self.0.evaluate_cp(w, b, bucket)
         } else {
-            self.0.evaluate_cp(b, w)
+            self.0.evaluate_cp(b, w, bucket)
         }
     }
     fn name(&self) -> &'static str {

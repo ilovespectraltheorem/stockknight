@@ -4,7 +4,7 @@ A Stockfish-style engine for **KnightChess** (a 6×6 drop-chess variant) and an 
 to play and evaluate games.
 
 **Play Maki in your browser: https://ilovespectraltheorem.github.io/stockknight/**
-(the website and the Stockhorse engine with the G21 network; how it is published:
+(the website and the Stockhorse engine with the G25 network; how it is published:
 [docs/DEPLOY.md](docs/DEPLOY.md)).
 
 - Rules: [docs/RULES.md](docs/RULES.md) (ruleset `knightchess-2`)

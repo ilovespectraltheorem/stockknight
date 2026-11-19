@@ -35,7 +35,7 @@ engine plays exactly the reference engine's moves at equal node budgets (tested)
 | | Nodes/s (Chromium, laptop) |
 |---|---|
 | Reference engine, G0 (JavaScript) | ≈ 450k |
-| Stockhorse, G21 (WebAssembly SIMD) | ≈ 450k |
+| Stockhorse, G25 (WebAssembly SIMD) | ≈ 450k |
 
 The network loads on a worker's first search (about 0.6 s, after a 29 MB download the browser
 then caches). If WebAssembly or the network is unavailable, the worker falls back to G0.

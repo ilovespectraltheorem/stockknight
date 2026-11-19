@@ -20,7 +20,7 @@ import torch
 
 from . import RULESET, binary
 from .check_nnue import max_difference
-from .nnue import SkNet, batch_torch, load_nnue, save_nnue
+from .nnue import SkNet, batch_torch, bucket_torch, load_nnue, save_nnue
 from .records import fit_k, load
 
 
@@ -47,8 +47,9 @@ def evaluate(net, raw, K, lam, scale, batch=65536):
     n = raw.shape[0]
     with torch.no_grad():
         for i in range(0, n, batch):
-            stm, other, score, result = batch_torch(raw[i : i + batch])
-            out = net(stm, other)
+            chunk = raw[i : i + batch]
+            stm, other, score, result = batch_torch(chunk)
+            out = net(stm, other, bucket_torch(chunk, net.buckets))
             p = torch.sigmoid(out * scale / K)
             t = lam * torch.sigmoid(score / K) + (1 - lam) * result
             loss += float(((p - t) ** 2).sum())
@@ -75,6 +76,7 @@ def main():
     ap.add_argument("--l1", type=int, default=32)
     ap.add_argument("--l2", type=int, default=32)
     ap.add_argument("--output-scale", type=float, default=600.0)
+    ap.add_argument("--buckets", type=int, default=1, help="output buckets (layer stacks) by material")
     ap.add_argument("--init-from", default="", help="start from this network's weights")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--threads", type=int, default=0)
@@ -109,9 +111,13 @@ def main():
     }
     print(f"G0 baseline: val_loss {g0_stats['val_loss']:.6f} result_mse {g0_stats['result_mse']:.5f}", flush=True)
 
-    net = SkNet(a.ft, a.l1, a.l2, a.output_scale)
+    net = SkNet(a.ft, a.l1, a.l2, a.output_scale, a.buckets)
     if a.init_from:
-        net.load_state_dict(load_nnue(a.init_from).state_dict())
+        src = load_nnue(a.init_from)
+        if src.buckets == a.buckets:
+            net.load_state_dict(src.state_dict())
+        else:
+            net.expand_from(src)
         print(f"starting from {a.init_from}", flush=True)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=a.decay_every, gamma=a.decay)
@@ -134,8 +140,9 @@ def main():
         perm = torch.from_numpy(rng.permutation(n))
         total = 0.0
         for i in range(0, n - a.batch + 1, a.batch):
-            stm, other, score, result = batch_torch(train[perm[i : i + a.batch]])
-            out_raw = net(stm, other)
+            chunk = train[perm[i : i + a.batch]]
+            stm, other, score, result = batch_torch(chunk)
+            out_raw = net(stm, other, bucket_torch(chunk, a.buckets))
             p = torch.sigmoid(out_raw * a.output_scale / K)
             target = a.lam * torch.sigmoid(score / K) + (1 - a.lam) * result
             loss = ((p - target) ** 2).mean()
@@ -186,7 +193,7 @@ def main():
     write_json(out / "summary.json", {
         "ruleset": RULESET, "train_positions": int(n), "val_positions": int(val.shape[0]), "K": K, "lambda": a.lam,
         "best_epoch": best_epoch, "epochs_run": len(history), "best": history[best_epoch - 1] if best_epoch else None,
-        "g0": g0_stats, "architecture": f"{a.ft}-{a.l1}-{a.l2}", "rust_max_difference": diff,
+        "g0": g0_stats, "architecture": f"{a.ft}-{a.l1}-{a.l2}" + (f" x{a.buckets}" if a.buckets > 1 else ""), "rust_max_difference": diff,
         "init_from": a.init_from or None,
     })
 

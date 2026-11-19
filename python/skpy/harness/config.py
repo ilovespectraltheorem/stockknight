@@ -66,6 +66,7 @@ SCHEMA = {
         "l1": K(32, "First hidden layer", min=1, max=128),
         "l2": K(32, "Second hidden layer", min=1, max=128),
         "output_scale": K(600.0, "Centipawns per unit of network output", min=1),
+        "buckets": K(1, "Output buckets by material: one layer stack each, plus psqt weights when above 1", min=1, max=16),
     },
     "match": {
         "condition": K("nodes 5000", "Search limit of every rated game: 'nodes N', 'movetime MS' or 'depth N'; frozen once the run has games"),

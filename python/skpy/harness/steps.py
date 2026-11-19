@@ -406,7 +406,8 @@ class Harness:
                    "--epochs", tc["epochs"], "--patience", tc["patience"], "--batch", tc["batch"], "--lr", tc["lr"],
                    "--decay", tc["lr_decay"], "--decay-every", tc["decay_every"], "--lambda", tc["lambda"],
                    "--K", tc["K"], "--ft", tc["ft"], "--l1", tc["l1"], "--l2", tc["l2"],
-                   "--output-scale", tc["output_scale"], "--seed", self.seed("train", m["name"]),
+                   "--output-scale", tc["output_scale"], "--buckets", tc["buckets"],
+                   "--seed", self.seed("train", m["name"]),
                    "--name", f"{self.run.name} {m['name']} round {m['round']}"]
             if self.cfg["hardware"]["train_threads"]:
                 cmd += ["--threads", self.cfg["hardware"]["train_threads"]]

@@ -84,7 +84,7 @@ struct Delta {
 }
 
 struct Entry {
-    /// Both perspectives, `[colour][ft]`.
+    /// Both perspectives, `[colour][acc_w]`.
     acc: Vec<i16>,
     computed: [bool; 2],
     ksq: [u8; 2],
@@ -136,7 +136,7 @@ impl QuantEval {
     fn entry(&mut self, i: usize) {
         while self.stack.len() <= i {
             self.stack.push(Entry {
-                acc: vec![0; 2 * self.net.ft],
+                acc: vec![0; 2 * self.net.acc_w],
                 computed: [false; 2],
                 ksq: [0; 2],
                 delta: Delta::default(),
@@ -180,7 +180,7 @@ impl QuantEval {
         self.net.update_in_place(&mut c.acc, &self.add, &self.sub);
         c.board = pos.board;
         c.res = res;
-        let ft = self.net.ft;
+        let ft = self.net.acc_w;
         let e = &mut self.stack[self.top];
         e.acc[p * ft..(p + 1) * ft].copy_from_slice(&c.acc);
         e.computed[p] = true;
@@ -188,7 +188,7 @@ impl QuantEval {
 
     /// Apply entry `i`'s changes to `p`'s accumulator of entry `i − 1`.
     fn apply(&mut self, i: usize, p: usize) {
-        let ft = self.net.ft;
+        let ft = self.net.acc_w;
         let (head, tail) = self.stack.split_at_mut(i);
         let (prev, cur) = (&head[i - 1], &mut tail[0]);
         let d = cur.delta;
@@ -244,7 +244,7 @@ impl QuantEval {
         self.ensure(pos, 1);
     }
 
-    /// Both accumulators for `pos`, `[colour][ft]`.
+    /// Both accumulators for `pos`, `[colour][acc_w]`.
     pub fn accumulators(&mut self, pos: &Position) -> &[i16] {
         self.sync(pos);
         &self.stack[self.top].acc
@@ -253,12 +253,16 @@ impl QuantEval {
     /// Centipawns from the side to move's view.
     pub fn evaluate_pos(&mut self, pos: &Position) -> i32 {
         self.sync(pos);
-        let ft = self.net.ft;
-        let (w, b) = self.stack[self.top].acc.split_at(ft);
-        if pos.side == WHITE {
-            self.net.evaluate_cp(w, b)
+        let bucket = if self.net.buckets > 1 {
+            crate::features::bucket(pos, self.net.buckets)
         } else {
-            self.net.evaluate_cp(b, w)
+            0
+        };
+        let (w, b) = self.stack[self.top].acc.split_at(self.net.acc_w);
+        if pos.side == WHITE {
+            self.net.evaluate_cp(w, b, bucket)
+        } else {
+            self.net.evaluate_cp(b, w, bucket)
         }
     }
 

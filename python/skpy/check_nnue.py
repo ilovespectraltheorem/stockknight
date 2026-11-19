@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from . import binary
-from .nnue import batch_torch, load_nnue
+from .nnue import batch_torch, bucket_torch, load_nnue
 from .records import load
 
 
@@ -24,7 +24,7 @@ def max_difference(net_path, records_path, n=2000) -> float:
     raw = torch.from_numpy(load(records_path, limit=n).copy())
     with torch.no_grad():
         stm, other, _, _ = batch_torch(raw)
-        torch_out = net(stm, other).double().numpy()
+        torch_out = net(stm, other, bucket_torch(raw, net.buckets)).double().numpy()
     if len(rust) != len(torch_out):
         raise RuntimeError(f"Rust gave {len(rust)} outputs, PyTorch {len(torch_out)}")
     return float(np.max(np.abs(rust - torch_out)))

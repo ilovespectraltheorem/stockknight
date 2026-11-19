@@ -9,6 +9,11 @@
 //!   Biases include the half that makes the shifts round to nearest. Training keeps hidden
 //!   weights within ±127/64, so the first layer's k is at least 6.
 //!
+//! - **Buckets and psqt**: one set of hidden and output layers per bucket. A network with psqt
+//!   weights keeps them as extra accumulator columns after the `ft` activations (`acc_w` wide in
+//!   all, a multiple of 16), at their own scale `psqt_scale`, so the same update kernels keep
+//!   them current. They are not activated; their difference goes straight to the output.
+//!
 //! Everything is integer arithmetic, so the order of additions does not matter: the AVX2
 //! build of each kernel gives exactly the same results as the portable one, and an
 //! accumulator updated move by move equals one computed from scratch.
@@ -21,19 +26,12 @@ pub const MAX_FT: usize = 1024;
 /// Largest hidden layer.
 pub const MAX_HIDDEN: usize = 128;
 
+/// One bucket's hidden and output layers.
 #[derive(Clone, Debug)]
-pub struct QuantNet {
-    pub ft: usize,
-    pub l1: usize,
-    pub l2: usize,
-    pub output_scale: f32,
-    pub ft_shift: u32,
+pub struct Stack {
     pub l1_shift: u32,
     pub l2_shift: u32,
     pub out_shift: u32,
-    /// `[inputs][ft]`.
-    pub ft_w: Vec<i16>,
-    pub ft_b: Vec<i16>,
     /// `[l1][2·ft]`.
     pub l1_w: Vec<i8>,
     pub l1_b: Vec<i32>,
@@ -42,6 +40,25 @@ pub struct QuantNet {
     pub l2_b: Vec<i32>,
     pub out_w: Vec<i16>,
     pub out_b: i32,
+}
+
+#[derive(Clone, Debug)]
+pub struct QuantNet {
+    pub ft: usize,
+    /// Accumulator width: `ft`, plus the psqt columns rounded up to 16.
+    pub acc_w: usize,
+    pub l1: usize,
+    pub l2: usize,
+    pub buckets: usize,
+    /// Psqt columns are in the accumulator (false for single-bucket networks without psqt).
+    pub psqt: bool,
+    pub psqt_scale: f64,
+    pub output_scale: f32,
+    pub ft_shift: u32,
+    /// `[inputs][acc_w]`.
+    pub ft_w: Vec<i16>,
+    pub ft_b: Vec<i16>,
+    pub stacks: Vec<Stack>,
     /// Use the AVX2 kernels (only set when the CPU has AVX2).
     pub simd: bool,
     /// With `simd`, use the VNNI byte dot product in the first layer (only set when the CPU
@@ -102,34 +119,45 @@ fn hidden_shift(
 
 impl QuantNet {
     pub fn from_network(net: &Network) -> Result<Self, String> {
-        let (ft, l1, l2) = (net.ft, net.l1, net.l2);
+        let (ft, l1, l2, nb) = (net.ft, net.l1, net.l2, net.buckets);
         if ft > MAX_FT || l1 > MAX_HIDDEN || l2 > MAX_HIDDEN {
             return Err(format!("unsupported sizes {ft}-{l1}-{l2}"));
         }
         // The worst case for one accumulator entry: the bias, the 35 largest weights of one
         // king square's block (at most 35 pieces besides the own king) and all 10 reserve
         // weights.
-        let mut worst = 0f32;
-        let mut col = Vec::with_capacity(396);
-        for j in 0..ft {
-            let reserve: f32 = (BOARD_FEATURES..NUM_FEATURES)
-                .map(|i| net.ft_w[i * ft + j].abs())
-                .sum();
+        let worst_col = |w: &dyn Fn(usize) -> f32, bias: f32| {
+            let reserve: f32 = (BOARD_FEATURES..NUM_FEATURES).map(|i| w(i).abs()).sum();
+            let mut col: Vec<f32> = Vec::with_capacity(396);
+            let mut worst = 0f32;
             for ksq in 0..36 {
                 col.clear();
-                col.extend((0..396).map(|i| net.ft_w[(ksq * 396 + i) * ft + j].abs()));
+                col.extend((0..396).map(|i| w(ksq * 396 + i).abs()));
                 col.sort_unstable_by(|a, b| b.total_cmp(a));
                 let board: f32 = col[..35].iter().sum();
-                worst = worst.max(net.ft_b[j].abs() + reserve + board);
+                worst = worst.max(bias.abs() + reserve + board);
             }
+            worst
+        };
+        let mut worst = 0f32;
+        for j in 0..ft {
+            worst = worst.max(worst_col(&|i| net.ft_w[i * ft + j], net.ft_b[j]));
         }
         let ft_shift = (0..=8u32)
             .rev()
             .find(|&s| round_to(worst, 127.0 * (1u64 << s) as f64) + (1 << s) <= i16::MAX as i64)
             .ok_or("feature transformer weights are too large to quantize")?;
-        let l1_shift = hidden_shift(&net.l1_w, &net.l1_b, 2 * ft, 127, "first hidden layer")?;
-        let l2_shift = hidden_shift(&net.l2_w, &net.l2_b, l1, 32767, "second hidden layer")?;
-        let out_shift = hidden_shift(&net.out_w, &[net.out_b], l2, 32767, "output layer")?;
+        let psqt = net.psqt_w.len() == NUM_FEATURES * nb && net.psqt_w.iter().any(|&x| x != 0.0);
+        let acc_w = if psqt { ft + nb.div_ceil(16) * 16 } else { ft };
+        let mut psqt_scale = 0.0;
+        if psqt {
+            let mut pw = 0f32;
+            for b in 0..nb {
+                pw = pw.max(worst_col(&|i| net.psqt_w[i * nb + b], 0.0));
+            }
+            // At most 2^12 steps per raw unit; enough below i16 for the worst position.
+            psqt_scale = (32000.0 / pw.max(1e-6) as f64).min(4096.0).floor();
+        }
 
         let fs = 127.0 * (1u64 << ft_shift) as f64;
         let half = |k: u32| if k == 0 { 0 } else { 1i64 << (k - 1) };
@@ -139,31 +167,60 @@ impl QuantNet {
                 .map(|&x| (round_to(x, 127.0 * (1u64 << k) as f64) + half(k)) as i32)
                 .collect::<Vec<i32>>()
         };
+        let mut ft_w = vec![0i16; NUM_FEATURES * acc_w];
+        for i in 0..NUM_FEATURES {
+            for j in 0..ft {
+                ft_w[i * acc_w + j] = round_to(net.ft_w[i * ft + j], fs) as i16;
+            }
+            if psqt {
+                for b in 0..nb {
+                    ft_w[i * acc_w + ft + b] = round_to(net.psqt_w[i * nb + b], psqt_scale) as i16;
+                }
+            }
+        }
+        let mut ft_b = vec![0i16; acc_w];
+        for (d, &x) in ft_b.iter_mut().zip(&net.ft_b) {
+            *d = (round_to(x, fs) + half(ft_shift)) as i16;
+        }
+        let mut stacks = Vec::with_capacity(nb);
+        for b in 0..nb {
+            let w1 = &net.l1_w[b * l1 * 2 * ft..(b + 1) * l1 * 2 * ft];
+            let b1 = &net.l1_b[b * l1..(b + 1) * l1];
+            let w2 = &net.l2_w[b * l2 * l1..(b + 1) * l2 * l1];
+            let b2 = &net.l2_b[b * l2..(b + 1) * l2];
+            let wo = &net.out_w[b * l2..(b + 1) * l2];
+            let bo = net.out_b[b];
+            let l1_shift = hidden_shift(w1, b1, 2 * ft, 127, "first hidden layer")?;
+            let l2_shift = hidden_shift(w2, b2, l1, 32767, "second hidden layer")?;
+            let out_shift = hidden_shift(wo, &[bo], l2, 32767, "output layer")?;
+            stacks.push(Stack {
+                l1_shift,
+                l2_shift,
+                out_shift,
+                l1_w: w1
+                    .iter()
+                    .map(|&x| round_to(x, (1u64 << l1_shift) as f64) as i8)
+                    .collect(),
+                l1_b: bias32(b1, l1_shift),
+                l2_w: ints16(w2, (1u64 << l2_shift) as f64),
+                l2_b: bias32(b2, l2_shift),
+                out_w: ints16(wo, (1u64 << out_shift) as f64),
+                out_b: round_to(bo, 127.0 * (1u64 << out_shift) as f64) as i32,
+            });
+        }
         Ok(QuantNet {
             ft,
+            acc_w,
             l1,
             l2,
+            buckets: nb,
+            psqt,
+            psqt_scale,
             output_scale: net.output_scale,
             ft_shift,
-            l1_shift,
-            l2_shift,
-            out_shift,
-            ft_w: ints16(&net.ft_w, fs),
-            ft_b: net
-                .ft_b
-                .iter()
-                .map(|&x| (round_to(x, fs) + half(ft_shift)) as i16)
-                .collect(),
-            l1_w: net
-                .l1_w
-                .iter()
-                .map(|&x| round_to(x, (1u64 << l1_shift) as f64) as i8)
-                .collect(),
-            l1_b: bias32(&net.l1_b, l1_shift),
-            l2_w: ints16(&net.l2_w, (1u64 << l2_shift) as f64),
-            l2_b: bias32(&net.l2_b, l2_shift),
-            out_w: ints16(&net.out_w, (1u64 << out_shift) as f64),
-            out_b: round_to(net.out_b, 127.0 * (1u64 << out_shift) as f64) as i32,
+            ft_w,
+            ft_b,
+            stacks,
             simd: simd_available() && Self::simd_shape(ft, l1),
             vnni: vnni_available(),
         })
@@ -178,7 +235,7 @@ impl QuantNet {
     /// Feature `f`'s row of the feature transformer.
     #[inline]
     pub fn row(&self, f: usize) -> &[i16] {
-        &self.ft_w[f * self.ft..(f + 1) * self.ft]
+        &self.ft_w[f * self.acc_w..(f + 1) * self.acc_w]
     }
 
     /// `dst = src + Σ rows(add) − Σ rows(sub)`, one perspective's accumulator.
@@ -188,7 +245,7 @@ impl QuantNet {
         if self.simd {
             // SAFETY: `simd` is only set when the CPU has AVX2.
             return unsafe {
-                avx2::update(self, &mut dst[..self.ft], Some(&src[..self.ft]), add, sub)
+                avx2::update(self, &mut dst[..self.acc_w], Some(&src[..self.acc_w]), add, sub)
             };
         }
         self.update_generic(dst, src, add, sub)
@@ -200,21 +257,21 @@ impl QuantNet {
         #[cfg(target_arch = "x86_64")]
         if self.simd {
             // SAFETY: `simd` is only set when the CPU has AVX2.
-            return unsafe { avx2::update(self, &mut acc[..self.ft], None, add, sub) };
+            return unsafe { avx2::update(self, &mut acc[..self.acc_w], None, add, sub) };
         }
         self.add_rows(acc, add, sub)
     }
 
     #[inline(always)]
     fn update_generic(&self, dst: &mut [i16], src: &[i16], add: &[usize], sub: &[usize]) {
-        let n = self.ft;
+        let n = self.acc_w;
         dst[..n].copy_from_slice(&src[..n]);
         self.add_rows(dst, add, sub)
     }
 
     #[inline(always)]
     fn add_rows(&self, dst: &mut [i16], add: &[usize], sub: &[usize]) {
-        let dst = &mut dst[..self.ft];
+        let dst = &mut dst[..self.acc_w];
         for &f in add {
             for (d, w) in dst.iter_mut().zip(self.row(f)) {
                 *d = d.wrapping_add(*w);
@@ -229,32 +286,34 @@ impl QuantNet {
 
     /// The accumulator for a set of active inputs, from scratch.
     pub fn accumulate(&self, features: &[u32]) -> Vec<i16> {
-        let mut acc = vec![0i16; self.ft];
+        let mut acc = vec![0i16; self.acc_w];
         let add: Vec<usize> = features.iter().map(|&f| f as usize).collect();
         self.update(&mut acc, &self.ft_b, &add, &[]);
         acc
     }
 
-    /// The layers after the accumulators: the raw output at scale 127·2^out_shift.
+    /// Bucket `b`'s layers after the accumulators: the raw output at scale 127·2^out_shift
+    /// of that stack.
     #[inline]
-    pub fn propagate(&self, stm: &[i16], other: &[i16]) -> i32 {
+    pub fn propagate(&self, stm: &[i16], other: &[i16], b: usize) -> i32 {
+        let st = &self.stacks[b];
         #[cfg(target_arch = "x86_64")]
         if self.simd {
             // SAFETY: `simd` is only set when the CPU has AVX2.
             // SAFETY: `vnni` is only set when the CPU has AVX-512 VNNI.
             return unsafe {
                 if self.vnni {
-                    avx2::propagate_vnni(self, &stm[..self.ft], &other[..self.ft])
+                    avx2::propagate_vnni(self, st, &stm[..self.ft], &other[..self.ft])
                 } else {
-                    avx2::propagate(self, &stm[..self.ft], &other[..self.ft])
+                    avx2::propagate(self, st, &stm[..self.ft], &other[..self.ft])
                 }
             };
         }
-        self.propagate_generic(stm, other)
+        self.propagate_generic(st, stm, other)
     }
 
     #[inline(always)]
-    fn propagate_generic(&self, stm: &[i16], other: &[i16]) -> i32 {
+    fn propagate_generic(&self, st: &Stack, stm: &[i16], other: &[i16]) -> i32 {
         let ft = self.ft;
         let s = self.ft_shift;
         let mut x = [0u8; 2 * MAX_FT];
@@ -270,45 +329,51 @@ impl QuantNet {
         if n % 16 == 0 {
             // WebAssembly SIMD (the website): the same integer sums, 8 lanes at a time.
             for (o, h) in h1[..self.l1].iter_mut().enumerate() {
-                let row = &self.l1_w[o * n..(o + 1) * n];
-                let sum = self.l1_b[o].wrapping_add(wasm_simd::dot_i8_u8(row, &x[..n]));
-                *h = (sum >> self.l1_shift).clamp(0, 127) as i16;
+                let row = &st.l1_w[o * n..(o + 1) * n];
+                let sum = st.l1_b[o].wrapping_add(wasm_simd::dot_i8_u8(row, &x[..n]));
+                *h = (sum >> st.l1_shift).clamp(0, 127) as i16;
             }
-            return self.finish(&h1);
+            return self.finish(st, &h1);
         }
         for (o, h) in h1[..self.l1].iter_mut().enumerate() {
-            let row = &self.l1_w[o * n..(o + 1) * n];
-            let sum = row.iter().zip(&x[..n]).fold(self.l1_b[o], |s, (&w, &a)| {
+            let row = &st.l1_w[o * n..(o + 1) * n];
+            let sum = row.iter().zip(&x[..n]).fold(st.l1_b[o], |s, (&w, &a)| {
                 s.wrapping_add(w as i32 * a as i32)
             });
-            *h = (sum >> self.l1_shift).clamp(0, 127) as i16;
+            *h = (sum >> st.l1_shift).clamp(0, 127) as i16;
         }
-        self.finish(&h1)
+        self.finish(st, &h1)
     }
 
     /// The second hidden layer and the output, from the first hidden layer.
     #[inline(always)]
-    fn finish(&self, h1: &[i16; MAX_HIDDEN]) -> i32 {
+    fn finish(&self, st: &Stack, h1: &[i16; MAX_HIDDEN]) -> i32 {
         let mut h2 = [0i16; MAX_HIDDEN];
         layer(
-            &self.l2_w,
-            &self.l2_b,
+            &st.l2_w,
+            &st.l2_b,
             &h1[..self.l1],
-            self.l2_shift,
+            st.l2_shift,
             &mut h2[..self.l2],
         );
-        self.out_b + dot(&self.out_w, &h2[..self.l2])
+        st.out_b + dot(&st.out_w, &h2[..self.l2])
     }
 
-    /// Centipawns from a raw output.
+    /// Centipawns from bucket `b`'s raw output and the two accumulators' psqt columns.
     #[inline]
-    pub fn to_cp(&self, raw: i32) -> i32 {
-        let scale = 127.0 * (1u64 << self.out_shift) as f64;
-        (raw as f64 * self.output_scale as f64 / scale).round() as i32
+    pub fn to_cp(&self, raw: i32, stm: &[i16], other: &[i16], b: usize) -> i32 {
+        let scale = 127.0 * (1u64 << self.stacks[b].out_shift) as f64;
+        let mut x = raw as f64 / scale;
+        if self.psqt {
+            let d = stm[self.ft + b] as i32 - other[self.ft + b] as i32;
+            x += d as f64 / self.psqt_scale / 2.0;
+        }
+        (x * self.output_scale as f64).round() as i32
     }
 
-    pub fn evaluate_cp(&self, stm: &[i16], other: &[i16]) -> i32 {
-        self.to_cp(self.propagate(stm, other))
+    /// Centipawns for accumulators `stm` and `other` (each `acc_w` long) in bucket `b`.
+    pub fn evaluate_cp(&self, stm: &[i16], other: &[i16], b: usize) -> i32 {
+        self.to_cp(self.propagate(stm, other, b), stm, other, b)
     }
 }
 
@@ -333,7 +398,7 @@ fn layer(w: &[i16], b: &[i32], x: &[i16], shift: u32, out: &mut [i16]) {
 mod avx2 {
     use std::arch::x86_64::*;
 
-    use super::{QuantNet, MAX_FT, MAX_HIDDEN};
+    use super::{QuantNet, Stack, MAX_FT, MAX_HIDDEN};
 
     /// `dst = (src or dst) + Σ rows(add) − Σ rows(sub)`; `dst` and `src` are `ft` long.
     #[target_feature(enable = "avx2")]
@@ -344,7 +409,7 @@ mod avx2 {
         add: &[usize],
         sub: &[usize],
     ) {
-        let ft = q.ft;
+        let ft = q.acc_w;
         let src = src.map_or(dst.as_ptr(), |s| s.as_ptr());
         let w = q.ft_w.as_ptr();
         for c in (0..ft).step_by(16) {
@@ -372,17 +437,22 @@ mod avx2 {
     }
 
     #[target_feature(enable = "avx2")]
-    pub unsafe fn propagate(q: &QuantNet, stm: &[i16], other: &[i16]) -> i32 {
-        propagate_impl::<false>(q, stm, other)
+    pub unsafe fn propagate(q: &QuantNet, st: &Stack, stm: &[i16], other: &[i16]) -> i32 {
+        propagate_impl::<false>(q, st, stm, other)
     }
 
     #[target_feature(enable = "avx2,avx512vnni,avx512vl")]
-    pub unsafe fn propagate_vnni(q: &QuantNet, stm: &[i16], other: &[i16]) -> i32 {
-        propagate_impl::<true>(q, stm, other)
+    pub unsafe fn propagate_vnni(q: &QuantNet, st: &Stack, stm: &[i16], other: &[i16]) -> i32 {
+        propagate_impl::<true>(q, st, stm, other)
     }
 
     #[inline(always)]
-    unsafe fn propagate_impl<const VNNI: bool>(q: &QuantNet, stm: &[i16], other: &[i16]) -> i32 {
+    unsafe fn propagate_impl<const VNNI: bool>(
+        q: &QuantNet,
+        st: &Stack,
+        stm: &[i16],
+        other: &[i16],
+    ) -> i32 {
         let ft = q.ft;
         let chunks = 2 * ft / 32;
         let top = _mm256_set1_epi16(127);
@@ -406,9 +476,9 @@ mod avx2 {
         }
         let x = std::slice::from_raw_parts(x.as_ptr() as *const __m256i, chunks);
         let n = 2 * ft;
-        let w = q.l1_w.as_ptr();
+        let w = st.l1_w.as_ptr();
         let ones = _mm256_set1_epi16(1);
-        let shift = _mm_cvtsi32_si128(q.l1_shift as i32);
+        let shift = _mm_cvtsi32_si128(st.l1_shift as i32);
         let mut h1 = [0i16; MAX_HIDDEN];
         for o in (0..q.l1).step_by(4) {
             // Four rows side by side, so the four sums are independent chains.
@@ -428,7 +498,7 @@ mod avx2 {
             }
             let sums = _mm_add_epi32(
                 hadd4(s[0], s[1], s[2], s[3]),
-                _mm_loadu_si128(q.l1_b.as_ptr().add(o) as *const __m128i),
+                _mm_loadu_si128(st.l1_b.as_ptr().add(o) as *const __m128i),
             );
             let act = _mm_min_epi32(
                 _mm_max_epi32(_mm_sra_epi32(sums, shift), _mm_setzero_si128()),
@@ -441,22 +511,22 @@ mod avx2 {
             }
         }
         if q.l1 % 16 == 0 && q.l2 % 4 == 0 {
-            finish(q, &h1)
+            finish(q, st, &h1)
         } else {
-            q.finish(&h1)
+            q.finish(st, &h1)
         }
     }
 
     /// The second hidden layer and the output, when the sizes fit whole vectors.
     #[inline(always)]
-    unsafe fn finish(q: &QuantNet, h1: &[i16; MAX_HIDDEN]) -> i32 {
+    unsafe fn finish(q: &QuantNet, st: &Stack, h1: &[i16; MAX_HIDDEN]) -> i32 {
         let n = q.l1;
         let mut x = [_mm256_setzero_si256(); MAX_HIDDEN / 16];
         for (c, xc) in x[..n / 16].iter_mut().enumerate() {
             *xc = _mm256_loadu_si256(h1.as_ptr().add(16 * c) as *const __m256i);
         }
-        let w = q.l2_w.as_ptr();
-        let shift = _mm_cvtsi32_si128(q.l2_shift as i32);
+        let w = st.l2_w.as_ptr();
+        let shift = _mm_cvtsi32_si128(st.l2_shift as i32);
         let mut h2 = [0i32; MAX_HIDDEN];
         for o in (0..q.l2).step_by(4) {
             let mut s = [_mm256_setzero_si256(); 4];
@@ -469,7 +539,7 @@ mod avx2 {
             }
             let sums = _mm_add_epi32(
                 hadd4(s[0], s[1], s[2], s[3]),
-                _mm_loadu_si128(q.l2_b.as_ptr().add(o) as *const __m128i),
+                _mm_loadu_si128(st.l2_b.as_ptr().add(o) as *const __m128i),
             );
             let act = _mm_min_epi32(
                 _mm_max_epi32(_mm_sra_epi32(sums, shift), _mm_setzero_si128()),
@@ -477,8 +547,8 @@ mod avx2 {
             );
             _mm_storeu_si128(h2.as_mut_ptr().add(o) as *mut __m128i, act);
         }
-        let mut out = q.out_b;
-        for (&w, &h) in q.out_w.iter().zip(&h2[..q.l2]) {
+        let mut out = st.out_b;
+        for (&w, &h) in st.out_w.iter().zip(&h2[..q.l2]) {
             out = out.wrapping_add(w as i32 * h);
         }
         out

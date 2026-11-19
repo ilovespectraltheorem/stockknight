@@ -89,5 +89,5 @@ Accuracy per move is `103.1668 · e^(-4.354 · loss) - 3.1669`, clamped to 0–1
 accuracy is the mean over their unforced moves.
 
 The engine worker searches with Stockhorse in WebAssembly and the network named in
-`web/config.js` (G21), and falls back to the reference engine with G0, the hand-written
+`web/config.js` (G25), and falls back to the reference engine with G0, the hand-written
 evaluation, when that is unavailable. See [DEPLOY.md](DEPLOY.md).
