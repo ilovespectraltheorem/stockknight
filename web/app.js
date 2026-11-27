@@ -434,6 +434,15 @@
     { below: Infinity, piece: 'K', name: 'Full strength', blurb: 'Stockhorse at full strength, about two seconds a move.' },
   ];
   const bandFor = elo => BANDS.find(b => elo < b.below);
+  const COACH_ELO = 400; // Stockhorse's strength in Learn by playing
+  const Coach = window.Coach;
+
+  // The Resign button's words change online (Abort, Cancel) and while it asks to confirm.
+  function setResignLabel(text) {
+    const el = $('#btnResign .tool-label');
+    if (el.textContent !== text) el.textContent = text;
+    $('#btnResign').title = text === 'Sure?' ? 'Click again to resign' : text === 'Cancel' ? 'Cancel this game' : text;
+  }
 
   // --- play controller --------------------------------------------------------------------
 
@@ -453,6 +462,7 @@
       this.board.onSelect = sel => {
         this.dropSel = sel && sel.drop ? sel.drop : null;
         this.renderBars();
+        if (this.coach && sel) this.coach.offer(Coach.onSelect(this.pos, sel));
       };
       $('#btnFlip').onclick = () => {
         this.flipped = !this.flipped;
@@ -466,9 +476,17 @@
       };
       $('#btnUndo').onclick = () => this.undo();
       $('#btnResign').onclick = () => this.resign();
-      $('#btnNew').onclick = () => this.again();
-      $('#btnReviewThis').onclick = () => this.reviewThis();
+      $('#btnNew').onclick = $('#btnNewMenu').onclick = () => this.again();
+      $('#btnReviewThis').onclick = $('#btnReviewMenu').onclick = () => this.reviewThis();
       $('#btnSharePlay').onclick = () => this.share();
+      $('#btnHint').onclick = () => this.hint();
+      // The More menu closes after a pick, or on a click anywhere else.
+      $('#playMore').addEventListener('click', e => {
+        if (e.target.closest('.tool-menu button')) $('#playMore').open = false;
+      });
+      document.addEventListener('click', e => {
+        if ($('#playMore').open && !e.target.closest('#playMore')) $('#playMore').open = false;
+      });
       $('#btnAnalysePlay').onclick = () => {
         const g = this.game;
         if (!g) return;
@@ -507,14 +525,47 @@
       }
       const startFen = opts.fen || START_FEN;
       this.game = { id, mode: opts.mode, startFen, moves: [], white, black, result: null, elo: opts.elo, humanColor, date: Date.now() };
+      if (opts.coach) this.game.coach = true;
       this.pos = new Position(startFen);
+      this.hintArrows = [];
+      $('#coachBox').hidden = !opts.coach;
+      if (opts.coach) {
+        if (!this.coach) this.coach = new Coach.CoachPanel({ $, pieceSvg });
+        this.coach.reset();
+      }
       this.flipped = opts.mode === 'pve' ? humanColor === BLACK : this.pos.side === BLACK;
       $('#sharePanel').hidden = true;
       this.render();
       this.maybeEngine();
     },
 
+    // Learn by playing: White against a gentle Stockhorse, with the coach beside the board.
+    startCoached() {
+      this.start({ mode: 'pve', elo: window.EngineTasks.clampElo(COACH_ELO), color: 'w', coach: true });
+    },
+
+    // A hint for the learner: Stockhorse's best move as an arrow.
+    async hint() {
+      const g = this.game;
+      if (!g || g.result || this.thinking || !this.isHuman(this.pos.side)) return;
+      const n = g.moves.length;
+      $('#btnHint').disabled = true;
+      try {
+        const a = await engine.call('analyse', { fen: g.startFen, moves: g.moves.slice(), movetime: 400, depth: 8 });
+        if (this.game !== g || g.moves.length !== n || !a.best) return;
+        const m = this.pos.moveFromUci(a.best);
+        if (!m) return;
+        this.hintArrows = [{ move: m, color: 'rgb(46 140 90)' }];
+        this.render();
+      } catch {
+        /* superseded */
+      } finally {
+        $('#btnHint').disabled = false;
+      }
+    },
+
     again() {
+      if (this.game && this.game.coach) return this.startCoached();
       if (!this.game || this.game.mode === 'pve') return openPveDialog(this.game && this.game.startFen !== START_FEN ? this.game.startFen : null);
       if (this.game.mode === 'online') return openOnlineDialog(this.game.startFen);
       this.start({ mode: 'local' });
@@ -555,6 +606,8 @@
       this.pos.makeMove(m);
       this.game.moves.push(uci);
       this.dropSel = null;
+      this.hintArrows = [];
+      if (this.coach && this.game.coach) this.coach.offer(Coach.afterMove(this.pos, this.game.humanColor, this.game.moves));
       if (this.game.mode === 'local') this.flipped = this.pos.side === BLACK;
       const res = statusToResult(this.pos.status());
       if (res && !this.game.result) this.finish(res);
@@ -625,6 +678,7 @@
       }
       g.moves.splice(g.moves.length - n, n);
       g.result = null;
+      this.hintArrows = [];
       this.pos = buildPosition(g.startFen, g.moves);
       if (g.mode === 'local') this.flipped = this.pos.side === BLACK;
       this.render();
@@ -653,17 +707,16 @@
     // Resigning takes a second click within a few seconds (no browser confirm dialog, which
     // embedded pages may not be allowed to show).
     confirmResign() {
-      const b = $('#btnResign');
       if (this.resignArmed) {
         clearTimeout(this.resignArmed);
         this.resignArmed = 0;
-        b.textContent = this.resignLabel();
+        setResignLabel(this.resignLabel());
         return true;
       }
-      b.textContent = 'Click again to resign';
+      setResignLabel('Sure?');
       this.resignArmed = setTimeout(() => {
         this.resignArmed = 0;
-        b.textContent = this.resignLabel();
+        setResignLabel(this.resignLabel());
       }, 3000);
       return false;
     },
@@ -671,6 +724,8 @@
     finish(result) {
       const g = this.game;
       g.result = result;
+      this.hintArrows = [];
+      if (g.coach && this.coach) this.coach.show(Coach.endTip(result, g.humanColor));
       if (g.moves.length && result.reason !== 'aborted') saveGame({ ...g, moves: g.moves.slice() });
       setTimeout(() => showResult(g), 350);
     },
@@ -705,14 +760,20 @@
       if (!this.game) return;
       const g = this.game;
       const lastMove = g.moves.length ? this.lastMoveCode() : 0;
-      this.board.set({ pos: this.pos, flipped: this.flipped, lastMove, movable: this.movableColor(), badge: null, arrows: [] });
+      this.board.set({ pos: this.pos, flipped: this.flipped, lastMove, movable: this.movableColor(), badge: null, arrows: this.hintArrows || [] });
       this.renderBars();
       this.renderMoves();
       this.renderStatus();
       $('#playEval').hidden = !this.showEval;
-      $('#btnEval').classList.toggle('primary', this.showEval);
+      $('#btnEval').classList.toggle('on', this.showEval);
+      $('#btnEval').setAttribute('aria-pressed', String(this.showEval));
       $('#btnUndo').disabled = !this.canUndo();
       $('#btnResign').disabled = !!g.result || (g.mode === 'online' && !(this.online && this.online.color !== null));
+      // After the game, its next steps come first; during it, they wait in the More menu.
+      $('#playOver').hidden = !g.result || g.mode === 'online';
+      $('#btnReviewMenu').disabled = !g.moves.length;
+      $('#btnHint').hidden = !!g.result;
+      $('#btnHint').disabled = this.thinking || !this.isHuman(this.pos.side);
       // No engine help in a live game against a person.
       $('#btnAnalysePlay').disabled = g.mode === 'online' && !g.result && !!(this.online && this.online.color !== null);
       this.renderOnline();
@@ -1059,7 +1120,7 @@
       box.hidden = !info.length && !buttons.length;
       if (!st.result) {
         const label = this.resignLabel();
-        if (!this.resignArmed && $('#btnResign').textContent !== label) $('#btnResign').textContent = label;
+        if (!this.resignArmed) setResignLabel(label);
       }
     },
 
@@ -1067,7 +1128,7 @@
       const g = this.game;
       if (g && g.mode === 'online' && this.online && this.online.st && !g.result) {
         const st = this.online.st;
-        if (!(st.players.w && st.players.b)) return 'Cancel game';
+        if (!(st.players.w && st.players.b)) return 'Cancel';
         if (g.moves.length < 2) return 'Abort';
       }
       return 'Resign';
@@ -1078,7 +1139,7 @@
       this.online = null;
       clearInterval(this.clockTimer);
       $('#onlineBox').hidden = true;
-      $('#btnResign').textContent = 'Resign';
+      setResignLabel('Resign');
     },
   };
 
@@ -1091,7 +1152,7 @@
   }
 
   function showResult(g) {
-    if (location.hash.indexOf('#/play') !== 0 && location.hash.indexOf('#/online') !== 0) return;
+    if (!/^#\/(play|online|learn)$|^#\/online\//.test(location.hash)) return;
     const r = g.result;
     let title;
     let me = null;
@@ -2690,8 +2751,6 @@
     range.min = STRENGTH.min;
     range.max = STRENGTH.max;
     range.step = STRENGTH.step;
-    $('#strengthMin').textContent = STRENGTH.min;
-    $('#strengthMax').textContent = STRENGTH.max;
     let last = store.get('sk.elo', null);
     if (last === null) last = STRENGTH.legacy[store.get('sk.level', '')] ?? 1200;
     range.value = window.EngineTasks.clampElo(last);
@@ -2703,7 +2762,7 @@
   function renderPveFen() {
     const custom = !!pveFen && $('#pveFenSeg input:checked').value === 'custom';
     $('#pveFenPreview').hidden = !custom;
-    $('#dlgPve h2').textContent = custom ? 'Play Stockhorse from this position' : 'Choose your opponent';
+    $('#dlgPve h2').textContent = custom ? 'Play Stockhorse from this position' : 'Play Stockhorse';
   }
   $('#pveFenSeg').addEventListener('change', renderPveFen);
 
@@ -2729,13 +2788,6 @@
       renderStrength();
     });
   }
-  $('#strengthPresets').addEventListener('click', e => {
-    const b = e.target.closest('button[data-elo]');
-    if (!b) return;
-    e.preventDefault();
-    $('#strengthRange').value = window.EngineTasks.clampElo(+b.dataset.elo);
-    renderStrength();
-  });
 
   $('#dlgPve').addEventListener('close', () => {
     const dlg = $('#dlgPve');
@@ -2921,7 +2973,9 @@
     if (name !== 'analysis' && analysis.active) analysis.hide();
     if (name !== 'review' && review.active) review.hide();
     if (name !== 'train' && window.Train) window.Train.hide();
-    $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === name || (name === 'play' && a.dataset.nav === 'home')));
+    const coached = name === 'play' && play.game && play.game.coach;
+    const nav = coached ? 'learn' : name === 'play' ? 'home' : name;
+    $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === nav));
   }
 
   function route() {
@@ -2945,6 +2999,10 @@
     if (h !== '#/play' && play.online) play.leaveOnline();
     if (h === '#/play') {
       if (!play.game) play.start({ mode: 'local' });
+      else if (play.game.coach) {
+        // Learn by playing lives at #/learn; a plain #/play starts nothing new.
+        history.replaceState(null, '', `${location.pathname}${location.search}#/learn`);
+      }
       showView('play');
     } else if (h === '#/review') {
       showView('review');
@@ -2954,10 +3012,16 @@
       analysis.show();
     } else if (h === '#/rules') {
       showView('rules');
-    } else if (/^#\/learn(\/[a-z0-9-]+)?$/.test(h)) {
+    } else if (h === '#/learn') {
+      // Learn by playing: carry on with an unfinished coached game, or start one.
+      store.set('sk.learnTip', 'seen');
+      if (!(play.game && play.game.coach && !play.game.result)) play.startCoached();
+      showView('play');
+    } else if (/^#\/learn\/[a-z0-9-]+$/.test(h)) {
       showView('learn');
       store.set('sk.learnTip', 'seen');
-      window.Tutorial.show(h.split('/')[2]);
+      const id = h.split('/')[2];
+      window.Tutorial.show(id === 'lessons' ? undefined : id);
     } else if (/^#\/train(\/|$)/.test(h)) {
       showView('train');
       window.Train.show(h);
@@ -2969,8 +3033,8 @@
     window.scrollTo(0, 0);
   }
 
-  // A first-time visitor sees one pointer to the lessons above the Play button. It goes away
-  // for good once they open Learn, have a saved game, or close it.
+  // A first-time visitor sees "New? Start here" on the Learn card. It goes away for good once
+  // they open Learn or have a saved game.
   function renderLearnTip() {
     let learnt = false;
     try {
@@ -2979,7 +3043,9 @@
     } catch {
       /* no storage: treat it as a first visit */
     }
-    $('#learnBanner').hidden = !!store.get('sk.learnTip', null) || learnt || savedGames().length > 0;
+    const fresh = !store.get('sk.learnTip', null) && !learnt && savedGames().length === 0;
+    $('#learnNew').hidden = !fresh;
+    $('#learnCard').classList.toggle('fresh', fresh);
   }
 
   // --- decoration -------------------------------------------------------------------------
@@ -3023,7 +3089,8 @@
     };
     $('#brandMark').innerHTML = pieceSvg('N', 'w');
     $('#heroArt').innerHTML = heroArt();
-    $$('.mode-icon, .learn-banner-icon').forEach(el => (el.innerHTML = pieceSvg(el.dataset.piece, 'w')));
+    $$('.mode-icon').forEach(el => (el.innerHTML = pieceSvg(el.dataset.piece, 'w')));
+    $$('#colorSeg i[data-piece]').forEach(el => (el.innerHTML = pieceSvg(el.dataset.piece, el.dataset.color)));
 
     play.init();
     review.init();
@@ -3047,7 +3114,7 @@
       openPve: fen => openPveDialog(fen),
     });
 
-    $$('.mode-card, .more-row').forEach(card => {
+    $$('.mode-card').forEach(card => {
       card.onclick = () => {
         const m = card.dataset.mode;
         if (m === 'pve') openPveDialog();
@@ -3061,10 +3128,6 @@
         else if (m === 'learn') location.hash = '#/learn';
       };
     });
-    $('#learnBannerClose').onclick = () => {
-      store.set('sk.learnTip', 'dismissed');
-      renderLearnTip();
-    };
     document.addEventListener('click', e => {
       const b = e.target.closest('[data-game]');
       if (b) openSaved(b.dataset.game);

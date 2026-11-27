@@ -41,51 +41,38 @@
         <div class="hero-art" id="heroArt" aria-hidden="true"></div>
       </div>
 
-      <!-- First visit only: point a new player at the lessons. Hidden once they have opened Learn or dismissed it. -->
-      <div class="learn-banner" id="learnBanner" hidden>
-        <span class="learn-banner-icon" data-piece="P" aria-hidden="true"></span>
-        <span class="learn-banner-text"><b>New to Maki?</b> Learn the moves in 15 short lessons, with exercises on the board. No chess needed.</span>
-        <a class="btn primary" href="#/learn" id="learnBannerGo">Start lesson 1</a>
-        <button class="learn-banner-close" id="learnBannerClose" type="button" aria-label="Hide this tip">×</button>
-      </div>
-
-      <div class="start">
+      <!-- Every way to play and study, in one place. The Learn card is marked for first-time visitors. -->
+      <div class="modes">
         <button class="mode-card play-main" data-mode="pve">
           <span class="mode-icon" data-piece="N"></span>
           <span class="play-main-text">
-            <span class="mode-title">Play</span>
-            <span class="mode-sub">Against Stockhorse, at the strength you choose</span>
+            <span class="mode-title">Play Stockhorse</span>
+            <span class="mode-sub">The engine, at the strength you choose</span>
           </span>
           <span class="play-main-go" aria-hidden="true">→</span>
         </button>
-        <div class="play-alt">
-          <button class="mode-card alt" data-mode="local">
-            <span class="mode-title">Pass and play</span>
-            <span class="mode-sub">A friend beside you</span>
-          </button>
-          <button class="mode-card alt" data-mode="online" id="onlineCard">
-            <span class="mode-title">Play online</span>
-            <span class="mode-sub" id="onlineSub">A friend by link, or a quick pairing</span>
-          </button>
-        </div>
-      </div>
-
-      <h2 class="more-title">More</h2>
-      <div class="more">
-        <button class="more-row" data-mode="learn" id="learnRow">
+        <button class="mode-card" data-mode="learn" id="learnCard">
           <span class="mode-icon" data-piece="P"></span>
-          <span><span class="mode-title">Learn</span><span class="mode-sub">15 lessons from the moves up</span></span>
+          <span><span class="mode-title">Learn by playing <span class="new-tag" id="learnNew" hidden>New? Start here</span></span><span class="mode-sub">A real game, rules explained as they come up</span></span>
         </button>
-        <button class="more-row" data-mode="train">
+        <button class="mode-card" data-mode="local">
+          <span class="mode-icon" data-piece="Q"></span>
+          <span><span class="mode-title">Pass and play</span><span class="mode-sub">A friend beside you</span></span>
+        </button>
+        <button class="mode-card" data-mode="online" id="onlineCard">
+          <span class="mode-icon" data-piece="K"></span>
+          <span><span class="mode-title">Play online</span><span class="mode-sub" id="onlineSub">A friend by link, or a quick pairing</span></span>
+        </button>
+        <button class="mode-card" data-mode="train">
           <span class="mode-icon" data-piece="R"></span>
           <span><span class="mode-title">Train</span><span class="mode-sub">Openings, tactics and endgames</span></span>
         </button>
-        <button class="more-row" data-mode="analysis">
-          <span class="mode-icon" data-piece="K"></span>
+        <button class="mode-card" data-mode="analysis">
+          <span class="mode-icon" data-piece="B"></span>
           <span><span class="mode-title">Analysis board</span><span class="mode-sub">Set up a position, see the best lines</span></span>
         </button>
-        <button class="more-row" data-mode="review">
-          <span class="mode-icon" data-piece="B"></span>
+        <button class="mode-card" data-mode="review">
+          <span class="mode-icon" data-piece="N"></span>
           <span><span class="mode-title">Review a game</span><span class="mode-sub">Accuracy, blunders and better moves</span></span>
         </button>
       </div>
@@ -109,18 +96,38 @@
         </div>
         <aside class="panel">
           <div class="status" id="playStatus"></div>
-          <ol class="moves" id="playMoves"></ol>
-          <div class="controls">
-            <button class="btn" id="btnUndo" title="Take back">↶ Take back</button>
-            <button class="btn" id="btnFlip" title="Flip board">⇅ Flip</button>
-            <button class="btn" id="btnEval" title="Show Stockhorse's evaluation">Eval bar</button>
-            <button class="btn danger" id="btnResign">Resign</button>
+          <div class="coach-box" id="coachBox" hidden>
+            <div class="coach-head">
+              <span class="coach-icon" id="coachIcon" aria-hidden="true"></span>
+              <b id="coachTitle"></b>
+              <span class="coach-count" id="coachCount"></span>
+            </div>
+            <div class="coach-text" id="coachText" role="status" aria-live="polite"></div>
+            <div class="coach-chips" id="coachChips"></div>
+            <div class="coach-foot">
+              <button class="btn small" id="btnHint" type="button">Show a good move</button>
+              <a href="#/learn/lessons">Lessons and drills</a>
+            </div>
           </div>
-          <div class="controls">
-            <button class="btn" id="btnNew">New game</button>
-            <button class="btn" id="btnAnalysePlay" title="Open this game on the analysis board">Analyse</button>
-            <button class="btn" id="btnSharePlay" title="Share this game: a link, the moves or a game file">Share</button>
+          <ol class="moves" id="playMoves" data-empty="The moves will appear here."></ol>
+          <div class="controls game-over" id="playOver" hidden>
             <button class="btn primary" id="btnReviewThis">Review this game</button>
+            <button class="btn" id="btnNew">New game</button>
+          </div>
+          <div class="toolbar">
+            <button class="ptool" id="btnUndo" title="Take back your last move"><span aria-hidden="true">↶</span><span class="tool-label">Undo</span></button>
+            <button class="ptool" id="btnFlip" title="Flip the board"><span aria-hidden="true">⇅</span><span class="tool-label">Flip</span></button>
+            <button class="ptool" id="btnEval" title="Show Stockhorse's evaluation" aria-pressed="false"><span aria-hidden="true">±</span><span class="tool-label">Eval</span></button>
+            <button class="ptool danger" id="btnResign" title="Resign"><span aria-hidden="true">⚑</span><span class="tool-label">Resign</span></button>
+            <details class="tool-more" id="playMore">
+              <summary class="ptool" title="More"><span aria-hidden="true">⋯</span><span class="tool-label">More</span></summary>
+              <div class="tool-menu">
+                <button id="btnNewMenu">New game</button>
+                <button id="btnAnalysePlay">Analyse on the board</button>
+                <button id="btnSharePlay">Share</button>
+                <button id="btnReviewMenu">Review this game</button>
+              </div>
+            </details>
           </div>
           <div class="online-box" id="onlineBox" hidden>
             <p class="online-info" id="onlineInfo" hidden></p>
@@ -303,9 +310,9 @@
     <section class="view" id="view-learn" hidden>
       <div id="learnIndex">
         <div class="learn-hero">
-          <p class="eyebrow">Learn · from zero</p>
-          <h1>Learn to play Maki</h1>
-          <p class="lede">Short lessons for complete beginners: how every piece moves, drops, check and checkmate, and why stalemate wins. Each lesson ends with exercises on a real board.</p>
+          <p class="eyebrow">Learn · lessons and drills</p>
+          <h1>Step-by-step lessons</h1>
+          <p class="lede">Short lessons on each rule, with exercises on the board. Rather pick it up as you go? <a href="#/learn">Learn by playing</a> a real game instead.</p>
           <div class="learn-progress" id="learnProgress"></div>
         </div>
         <div id="learnChapters"></div>
@@ -379,7 +386,7 @@
           <li>The analysis board knows every such position exactly: set one up, or pick one from <b>Lone-piece endings</b>, to see the result of every move.</li>
         </ul>
         <p class="muted">To drop, click a piece in your reserve (beside the board) and then an empty square.</p>
-        <p>New to the game? The <a href="#/learn">Learn</a> section teaches all of this step by step, with exercises on the board.</p>
+        <p>New to the game? <a href="#/learn">Learn by playing</a>: a real game where each rule is explained the moment it comes up. Prefer drills? Try the <a href="#/learn/lessons">step-by-step lessons</a>.</p>
       </article>
     </section>
   </main>
@@ -387,7 +394,7 @@
   <!-- Dialogs ------------------------------------------------------------------------------- -->
   <dialog id="dlgPve" class="dialog">
     <form method="dialog">
-      <h2>Choose your opponent</h2>
+      <h2>Play Stockhorse</h2>
       <div class="strength">
         <div class="strength-head">
           <span class="strength-piece" id="strengthPiece" aria-hidden="true"></span>
@@ -401,11 +408,6 @@
           <input type="range" id="strengthRange" min="400" max="3000" step="50" value="1200" aria-label="Stockhorse strength in Elo">
           <button class="icon-btn" id="strengthUp" aria-label="50 Elo stronger">+</button>
         </div>
-        <div class="strength-scale"><span id="strengthMin">400</span><span id="strengthMax">3000</span></div>
-        <div class="strength-presets" id="strengthPresets">
-          <button data-elo="800">800</button><button data-elo="1200">1200</button><button data-elo="1600">1600</button>
-          <button data-elo="2000">2000</button><button data-elo="2400">2400</button><button data-elo="3000">3000</button>
-        </div>
       </div>
       <div id="pveFenWrap" hidden>
         <h3>Starting position</h3>
@@ -418,11 +420,10 @@
           <div class="ofen-side"><p class="ofen-info" id="pveFenInfo"></p></div>
         </div>
       </div>
-      <h3>Play as</h3>
-      <div class="seg" id="colorSeg">
-        <label><input type="radio" name="color" value="w" checked><span>White</span></label>
-        <label><input type="radio" name="color" value="random"><span>Random</span></label>
-        <label><input type="radio" name="color" value="b"><span>Black</span></label>
+      <div class="color-pick" id="colorSeg" role="radiogroup" aria-label="Play as">
+        <label title="Play White"><input type="radio" name="color" value="w" checked><span><i data-piece="K" data-color="w"></i>White</span></label>
+        <label title="Random colour"><input type="radio" name="color" value="random"><span><i class="half"></i>Random</span></label>
+        <label title="Play Black"><input type="radio" name="color" value="b"><span><i data-piece="K" data-color="b"></i>Black</span></label>
       </div>
       <div class="dialog-actions">
         <button class="btn" value="cancel">Cancel</button>
@@ -564,6 +565,7 @@
   <script src="online.js"></script>
   <script src="lessons.js"></script>
   <script src="tutorial.js"></script>
+  <script src="coach.js"></script>
   <script src="train/openings.js"></script>
   <script src="train/tactics.js"></script>
   <script src="train/endgames.js"></script>
