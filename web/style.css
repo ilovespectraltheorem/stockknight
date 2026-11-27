@@ -132,12 +132,54 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
 
 /* Home */
-.hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: center; margin: 12px 0 32px; }
+.hero {
+  display: grid; grid-template-columns: 1.25fr 1fr; gap: 32px; align-items: center; margin: 4px 0 24px; padding: 32px 36px;
+  border-radius: 20px; border: 1px solid var(--line); position: relative; overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 40%, rgb(214 168 60 / 0.28), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgb(124 139 153 / 0.18), transparent 50%),
+    var(--surface);
+}
 .eyebrow { text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px; color: var(--accent); font-weight: 600; margin: 0 0 8px; }
-.hero h1 { font-family: var(--font-display); font-size: clamp(30px, 4.4vw, 48px); line-height: 1.1; margin: 0 0 16px; font-weight: 600; text-wrap: balance; }
+.hero h1 { font-family: var(--font-display); font-size: clamp(32px, 4.8vw, 54px); line-height: 1.05; margin: 0 0 16px; font-weight: 600; text-wrap: balance; }
+.hero h1 em { font-style: italic; color: var(--accent); display: block; }
 .lede { color: var(--muted); font-size: 17px; max-width: 56ch; margin: 0; }
-.hero-art { aspect-ratio: 1; max-width: 380px; width: 100%; justify-self: center; }
-.hero-art svg { width: 100%; height: 100%; display: block; }
+.hero-points { list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-points li {
+  padding: 5px 12px; border-radius: 999px; font-size: 13.5px; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line);
+}
+.hero-points b { color: var(--text); font-weight: 650; }
+.hero-art { max-width: 340px; width: 100%; justify-self: center; filter: drop-shadow(0 14px 28px rgb(20 20 30 / 0.18)); }
+.hero-art svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* The drop animation in the hero (heroArt in app.js): 6 s, on a loop. */
+.hero-art .ha-tray { fill: var(--surface-2); stroke: var(--line); stroke-width: 0.5; }
+.hero-art .ha-slot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.6; animation: ha-slot 6s ease-in-out infinite; }
+.hero-art .ha-dots { fill: var(--accent); opacity: 0; animation: ha-dots 6s ease-in-out infinite; }
+.hero-art .ha-land { fill: var(--sq-last); opacity: 0; animation: ha-land 6s ease-in-out infinite; }
+.hero-art .ha-check { fill: rgb(220 50 40 / 0.55); opacity: 0; animation: ha-check 6s ease-in-out infinite; }
+.hero-art .ha-line { stroke: var(--accent); stroke-width: 1.1; stroke-dasharray: 2 1.6; stroke-linecap: round; fill: none; opacity: 0; animation: ha-check 6s ease-in-out infinite; }
+.hero-art .ha-rook { transform-box: fill-box; transform-origin: center; animation: ha-rook 6s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+@keyframes ha-rook {
+  0%, 14% { transform: translate(0, 0) scale(1); opacity: 1; }
+  30% { transform: translate(4px, -26px) scale(1.25); }
+  42% { transform: translate(5.5px, -24.5px) scale(1.1); }
+  47% { transform: translate(5.5px, -24.5px) scale(0.92); }
+  52%, 88% { transform: translate(5.5px, -24.5px) scale(1); opacity: 1; }
+  95% { transform: translate(5.5px, -24.5px) scale(1); opacity: 0; }
+  96% { transform: translate(0, 0) scale(1); opacity: 0; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+}
+@keyframes ha-slot { 0%, 14% { opacity: 1; } 22%, 92% { opacity: 0.35; } 100% { opacity: 1; } }
+@keyframes ha-dots { 0%, 12% { opacity: 0; } 20%, 38% { opacity: 0.7; } 46%, 100% { opacity: 0; } }
+@keyframes ha-land { 0%, 44% { opacity: 0; } 50%, 88% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes ha-check { 0%, 50% { opacity: 0; } 56%, 88% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .hero-art .ha-rook { animation: none; transform: translate(5.5px, -24.5px); }
+  .hero-art .ha-slot, .hero-art .ha-dots { animation: none; }
+  .hero-art .ha-land, .hero-art .ha-check, .hero-art .ha-line { animation: none; opacity: 1; }
+}
 
 /* One grid for every mode: Play across the top, the rest as even cards below. */
 .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -521,6 +563,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
   .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { grid-template-columns: 1fr; }
   .hero-art { max-width: 240px; order: -1; }
+  .hero { padding: 24px; }
   .board-col { max-width: 640px; }
 }
 @media (max-width: 520px) {
@@ -528,10 +571,17 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
   .brand-name { display: none; }
   .nav a { padding: 6px 8px; }
   /* On a phone the hero is a short header, so Play sits on the first screen. */
-  .hero { grid-template-columns: 96px minmax(0, 1fr); gap: 14px; margin: 0 0 18px; }
-  .hero-art { max-width: 96px; order: -1; align-self: start; }
-  .hero h1 { font-size: 24px; margin: 0 0 6px; }
-  .hero .lede { display: none; }
+  .hero {
+    grid-template-columns: 104px minmax(0, 1fr); grid-template-areas: "art eyebrow" "art title" "lede lede" "points points";
+    column-gap: 14px; row-gap: 0; margin: 0 0 14px; padding: 16px; border-radius: 16px; align-items: start;
+  }
+  .hero-text { display: contents; }
+  .hero .eyebrow { grid-area: eyebrow; align-self: end; }
+  .hero h1 { grid-area: title; font-size: 25px; margin: 0; }
+  .hero-art { grid-area: art; max-width: 104px; align-self: center; }
+  .hero .lede { grid-area: lede; font-size: 14.5px; margin-top: 12px; }
+  .hero-points { grid-area: points; margin-top: 10px; gap: 6px; }
+  .hero-points li { font-size: 12.5px; padding: 4px 10px; }
   .eyebrow { margin-bottom: 4px; }
   .play-main { padding: 16px 18px; }
   .play-main .mode-title { font-size: 24px; }

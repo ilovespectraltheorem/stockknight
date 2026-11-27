@@ -1,7 +1,9 @@
 # StockKnight
 
-A Stockfish-style engine for **Maki** (a 6×6 drop-chess variant) and an online platform
-to play and evaluate games.
+A Stockfish-style engine for **Maki** and an online platform to play and evaluate games.
+Maki is chess on a 6×6 board with one big twist: each side keeps two pawns, a rook and a bishop
+in reserve and, instead of moving, may drop one onto any empty square. A drop can attack, block
+a check or give mate out of nowhere, and since stalemate wins too, every game is sharp.
 
 **Play Maki in your browser: https://ilovespectraltheorem.github.io/stockknight/**
 (the website and the Stockhorse engine with the G25 network; how it is published:
