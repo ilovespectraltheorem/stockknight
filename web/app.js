@@ -3102,7 +3102,7 @@
       <circle class="ha-ripple" cx="25" cy="15" r="4"/>
       <rect class="ha-land" x="20" y="10" width="10" height="10"/>
       <circle class="ha-check" cx="15" cy="5" r="5.4"/>
-      <g class="ha-brill"><circle cx="29.2" cy="10.6" r="2.6"/><text x="29.2" y="11.75">!!</text></g>
+      <g class="ha-brill"><g class="ha-brill-pop"><circle cx="29.4" cy="10.4" r="3.8"/><text x="29.4" y="12">!!</text></g></g>
       ${men.join('')}
       <path class="ha-line" d="M41 5 H21"/>
       <rect class="ha-tray" x="12" y="63.5" width="31.5" height="13" rx="3"/>
@@ -3111,9 +3111,9 @@
       <g class="ha-bishop">${piece('B', 'w', 3.25, 6.5)}</g>
       ${hand}
       <g class="ha-caption">
-        <text class="ha-cap ha-cap1" x="30" y="-3.2">1. B@c5+!!  The drop</text>
-        <text class="ha-cap ha-cap2" x="30" y="-3.2">1… c6×c5  Forced</text>
-        <text class="ha-cap ha-cap3" x="30" y="-3.2">2. Re6#  Checkmate</text>
+        <g class="ha-cap ha-cap1"><rect x="7" y="-8.6" width="46" height="6.6" rx="3.3"/><text x="30" y="-4.1">!!  Brilliant drop: B@c5+</text></g>
+        <g class="ha-cap ha-cap2"><rect x="13" y="-8.6" width="34" height="6.6" rx="3.3"/><text x="30" y="-4.1">1… c6×c5, forced</text></g>
+        <g class="ha-cap ha-cap3"><rect x="1" y="-8.6" width="58" height="6.6" rx="3.3"/><text x="30" y="-4.1"><tspan class="ha-bang">B@c5!!</tspan> c6×c5 Re6#  Checkmate</text></g>
       </g>
     </svg>`;
   }
