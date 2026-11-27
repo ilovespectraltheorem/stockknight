@@ -247,7 +247,7 @@
   function openLesson(id) {
     const l = lessonById(id);
     if (!l) {
-      location.hash = '#/learn';
+      location.hash = '#/learn/lessons';
       return;
     }
     $('#learnIndex').hidden = true;
@@ -314,7 +314,7 @@
     const n = lesson.steps.length;
     const li = lessonIndex(lesson);
     const ch = CHAPTERS.find(c => c.id === lesson.chapter);
-    $('#lHead').innerHTML = `<a href="#/learn" class="learn-back">← All lessons</a>
+    $('#lHead').innerHTML = `<a href="#/learn/lessons" class="learn-back">← All lessons</a>
       <div class="learn-kicker">Part ${CHAPTERS.indexOf(ch) + 1} · ${ch.title}</div>
       <h2>${li + 1}. ${lesson.title}</h2>`;
     $('#lDots').innerHTML = lesson.steps.map((s, i) =>
@@ -401,7 +401,7 @@
     const li = lessonIndex(lesson);
     const nl = LESSONS[li + 1];
     lesson = null;
-    location.hash = nl ? `#/learn/${nl.id}` : '#/learn';
+    location.hash = nl ? `#/learn/${nl.id}` : '#/learn/lessons';
   }
 
   function prev() {

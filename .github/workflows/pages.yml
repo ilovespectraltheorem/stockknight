@@ -35,6 +35,8 @@ jobs:
         run: node web/test-wasm.js
       - name: Check the Train data
         run: node web/test-train.js
+      - name: Check the Learn by playing coach
+        run: node web/test-coach.js
       - name: Assemble the site
         env:
           MAKI_SERVER_URL: ${{ vars.MAKI_SERVER_URL }}

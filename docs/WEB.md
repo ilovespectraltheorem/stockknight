@@ -13,6 +13,7 @@ python3 -m http.server        # from the repo root, then open /web/  (everything
 node web/test-train.js        # the Train section's openings and puzzles against the rules
 node web/test.js              # engine tasks, analysis lines and move tree, review classification, online server
 node web/test-tutorial.js     # every Learn lesson position is legal and every exercise solvable
+node web/test-coach.js        # the Learn by playing coach explains each rule when it comes up
 node web/calibrate.js         # re-measure the Elo of each strength setting (see docs/STRENGTH.md)
 ```
 
@@ -20,8 +21,10 @@ node web/calibrate.js         # re-measure the Elo of each strength setting (see
 
 | Feature | How |
 |---|---|
-| Play the engine | Pick Stockhorse's strength by Elo with a slider (50-point steps, up to 3000 = full strength). Each Elo maps to a search node budget and a move-choice temperature, measured by self-play; see [STRENGTH.md](STRENGTH.md). The engine runs in a Web Worker |
+| Home | One grid of every mode: Play Stockhorse across the top, then Learn by playing, Pass and play, Play online, Train, Analysis board and Review. A first-time visitor sees "New? Start here" on Learn by playing |
+| Play the engine | Pick Stockhorse's strength by Elo with a slider and − / + (50-point steps, up to 3000 = full strength), and your colour. Each Elo maps to a search node budget and a move-choice temperature, measured by self-play; see [STRENGTH.md](STRENGTH.md). The engine runs in a Web Worker |
 | Pass and play | Both sides on one screen; the board turns to the side to move |
+| Play screen | Status, the move list and one row of tools: Undo, Flip, Eval, Resign and More (New game, Analyse on the board, Share, Review this game). When a game ends, Review this game and New game come up above the tools |
 | Online | See [Online play](#online-play) below |
 | Moving | Click or drag a piece. To drop, click a piece in your reserve (beside the board), then a highlighted square. A reserve piece is only clickable when it has a legal drop |
 | Analysis board | See [Analysis board](#analysis-board) below |
@@ -64,7 +67,17 @@ the system share sheet (`share_target`) and opens `.maki`/`.txt` game files (`fi
 
 ## Learn
 
-`#/learn`, from the Learn link in the top bar or the banner on the home page: 15 lessons for
+`#/learn`, from the Learn link in the top bar or the Learn by playing card on the home page, is
+**Learn by playing**: a real game as White against Stockhorse at 400 Elo, with a coach beside the
+board (`web/coach.js`). Each rule is explained the first time it matters: picking up each kind
+of piece, a drop (and its two limits), the first time a drop becomes legal, a capture, a pawn
+crossing into the enemy half or reaching the last rank, check given and received, the
+opponent's first drop, piece values a few moves in, and how the game ended (checkmate,
+stalemate wins, repetition, bare kings). The rules met so far show as chips to read again, and
+**Show a good move** draws Stockhorse's best move as an arrow. `web/test-coach.js` checks that
+each tip fires when it should.
+
+`#/learn/lessons`, linked from the coach and the Rules page, keeps the step-by-step lessons: 15 lessons for
 complete beginners in four parts (the pieces; captures and drops; check, mate and stalemate;
 playing well), 55 steps in all. A step is either text beside a position, or an exercise played
 as White on the board:
