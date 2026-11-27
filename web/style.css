@@ -153,76 +153,27 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
 .hero-art { max-width: 340px; width: 100%; justify-self: center; filter: drop-shadow(0 14px 28px rgb(20 20 30 / 0.18)); }
 .hero-art svg { width: 100%; height: auto; display: block; overflow: visible; }
 
-/* The hero combination (heroArt in app.js): 10 s on a loop. A gloved hand lifts the bishop from
-   the reserve and drops it on c5 with check; the c6 pawn takes it; the rook mates on e6. */
+/* The hero combination (heroArt and heroPlay in app.js): a gloved hand lifts the bishop from the
+   reserve and drops it on c5 with check; the c6 pawn takes it; the rook mates on e6. The motion
+   is set from JavaScript; these are only the looks. */
 .hero-art .ha-tray { fill: var(--surface-2); stroke: var(--line); stroke-width: 0.5; }
 .hero-art .ha-tray-label { font: 600 2.6px var(--font); fill: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-.hero-art .ha-slot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.6; animation: ha-slot 12s ease-in-out infinite; }
+.hero-art .ha-slot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.6; }
 .hero-art .ha-glove { fill: #fbf8f1; stroke: #1d2127; stroke-width: 0.55; stroke-linejoin: round; }
 .hero-art .ha-crease { fill: none; stroke: #1d2127; stroke-width: 0.4; stroke-linecap: round; opacity: 0.7; }
 .hero-art .ha-cuff { fill: var(--accent); stroke: #1d2127; stroke-width: 0.55; }
-.hero-art .ha-hand { animation: ha-hand 12s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
-.hero-art .ha-bishop { transform-box: fill-box; transform-origin: 50% 100%; animation: ha-bishop 12s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
-.hero-art .ha-pawn { animation: ha-pawn 12s ease-in-out infinite; }
-.hero-art .ha-rook { animation: ha-rook 12s ease-in-out infinite; }
-.hero-art .ha-land { fill: var(--sq-last); opacity: 0; animation: ha-land 12s ease-in-out infinite; }
-.hero-art .ha-ripple { fill: none; stroke: var(--accent); stroke-width: 0.8; opacity: 0; transform-box: fill-box; transform-origin: center; animation: ha-ripple 12s ease-out infinite; }
-.hero-art .ha-check { fill: rgb(220 50 40 / 0.6); opacity: 0; animation: ha-check 12s ease-in-out infinite; }
-.hero-art .ha-line { stroke: rgb(220 50 40 / 0.9); stroke-width: 1.1; stroke-dasharray: 2 1.6; stroke-linecap: round; fill: none; opacity: 0; animation: ha-mate 12s ease-in-out infinite; }
-.hero-art .ha-brill { opacity: 0; animation: ha-brill 12s ease-in-out infinite; }
-.hero-art .ha-brill-pop { transform-box: fill-box; transform-origin: center; animation: ha-brill-pop 12s ease-out infinite; }
-.hero-art .ha-brill circle { fill: var(--c-brilliant); stroke: #fff; stroke-width: 0.8; filter: drop-shadow(0 0.6px 0.8px rgb(0 0 0 / 0.35)); }
-.hero-art .ha-brill text { font: 900 4.4px var(--font); fill: #fff; text-anchor: middle; letter-spacing: -0.2px; }
-@keyframes ha-brill { 0%, 38% { opacity: 0; } 40%, 54% { opacity: 1; } 57%, 100% { opacity: 0; } }
-@keyframes ha-brill-pop { 0%, 38% { transform: scale(0); } 41% { transform: scale(1.35); } 44%, 100% { transform: scale(1); } }
-.hero-art .ha-cap { opacity: 0; }
+.hero-art .ha-land { fill: var(--sq-last); }
+.hero-art .ha-ripple { fill: none; stroke: var(--accent); stroke-width: 0.8; }
+.hero-art .ha-check { fill: rgb(220 50 40 / 0.6); }
+.hero-art .ha-line { stroke: rgb(220 50 40 / 0.9); stroke-width: 1.1; stroke-dasharray: 2 1.6; stroke-linecap: round; fill: none; }
+.hero-art .ha-brill circle { fill: var(--c-brilliant); stroke: #fff; stroke-width: 0.8; }
+.hero-art .ha-brill text { font: 900 4.4px var(--font); fill: #fff; text-anchor: middle; }
 .hero-art .ha-cap rect { fill: var(--surface); stroke: var(--line); stroke-width: 0.4; }
 .hero-art .ha-cap text { font: 700 3.3px var(--font); fill: var(--text); text-anchor: middle; white-space: pre; }
 .hero-art .ha-cap1 rect { fill: var(--c-brilliant); stroke: none; }
 .hero-art .ha-cap1 text { fill: #fff; }
 .hero-art .ha-cap3 text { fill: var(--accent); font-size: 3.1px; }
 .hero-art .ha-cap3 .ha-bang { fill: var(--c-brilliant); font-weight: 900; }
-.hero-art .ha-cap1 { animation: ha-cap1 12s ease-in-out infinite; }
-.hero-art .ha-cap2 { animation: ha-cap2 12s ease-in-out infinite; }
-.hero-art .ha-cap3 { animation: ha-cap3 12s ease-in-out infinite; }
-@keyframes ha-hand {
-  0% { transform: translate(78px, 30px); opacity: 0; }
-  6% { opacity: 1; }
-  14% { transform: translate(37.5px, 65.6px); }
-  18% { transform: translate(37.5px, 66.6px); }
-  30% { transform: translate(27px, -1px); }
-  36% { transform: translate(25px, 10.6px); }
-  39% { transform: translate(25px, 10.6px); opacity: 1; }
-  48%, 100% { transform: translate(72px, -14px); opacity: 0; }
-}
-@keyframes ha-bishop {
-  0%, 18% { transform: translate(0, 0) scale(1); opacity: 1; }
-  30% { transform: translate(-10.5px, -66.6px) scale(1.12); }
-  36% { transform: translate(-12.5px, -55px) scale(1); }
-  38% { transform: translate(-12.5px, -55px) scale(1.1, 0.86); }
-  41% { transform: translate(-12.5px, -55px) scale(1); }
-  53% { transform: translate(-12.5px, -55px) scale(1); opacity: 1; }
-  57%, 95% { transform: translate(-12.5px, -55px) scale(0.6); opacity: 0; }
-  96% { transform: translate(0, 0) scale(1); opacity: 0; }
-  100% { transform: translate(0, 0); opacity: 1; }
-}
-@keyframes ha-pawn { 0%, 52% { transform: translate(0, 0); } 57%, 94% { transform: translate(0, 10px); } 99%, 100% { transform: translate(0, 0); } }
-@keyframes ha-rook { 0%, 64% { transform: translate(0, 0); } 70%, 94% { transform: translate(0, -10px); } 99%, 100% { transform: translate(0, 0); } }
-@keyframes ha-slot { 0%, 16% { opacity: 1; } 22%, 94% { opacity: 0.3; } 100% { opacity: 1; } }
-@keyframes ha-land { 0%, 37% { opacity: 0; } 41%, 52% { opacity: 1; } 57%, 100% { opacity: 0; } }
-@keyframes ha-ripple { 0%, 37% { opacity: 0; transform: scale(0.6); } 38% { opacity: 0.9; transform: scale(0.8); } 46%, 100% { opacity: 0; transform: scale(2.4); } }
-@keyframes ha-check { 0%, 38% { opacity: 0; } 41%, 52% { opacity: 1; } 56%, 66% { opacity: 0; } 71%, 92% { opacity: 1; } 97%, 100% { opacity: 0; } }
-@keyframes ha-mate { 0%, 69% { opacity: 0; } 73%, 92% { opacity: 1; } 97%, 100% { opacity: 0; } }
-@keyframes ha-cap1 { 0%, 38% { opacity: 0; } 41%, 54% { opacity: 1; } 56%, 100% { opacity: 0; } }
-@keyframes ha-cap2 { 0%, 55% { opacity: 0; } 57%, 65% { opacity: 1; } 67%, 100% { opacity: 0; } }
-@keyframes ha-cap3 { 0%, 67% { opacity: 0; } 71%, 94% { opacity: 1; } 97%, 100% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .hero-art * { animation: none !important; }
-  .hero-art .ha-hand, .hero-art .ha-bishop, .hero-art .ha-cap1, .hero-art .ha-cap2, .hero-art .ha-brill { opacity: 0; }
-  .hero-art .ha-pawn { transform: translate(0, 10px); }
-  .hero-art .ha-rook { transform: translate(0, -10px); }
-  .hero-art .ha-check, .hero-art .ha-line, .hero-art .ha-cap3 { opacity: 1; }
-}
 
 /* One grid for every mode: Play across the top, the rest as even cards below. */
 .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -856,4 +807,24 @@ body.dropping .drop-hint { display: grid; }
 .mode-card:hover .mode-icon .piece { animation: piece-drop 0.45s cubic-bezier(0.3, 0.7, 0.4, 1.25); }
 @media (prefers-reduced-motion: reduce) {
   .sq.dropped .piece, .sq.dropped::after, .res.usable .piece, .mode-card:hover .mode-icon .piece { animation: none; }
+}
+
+/* Home, kept to the essentials: the headline and the combination, Play, and one row of small tiles.
+   A tile's longer description is its tooltip (title). */
+.modes { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.mode-card:not(.play-main) { flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 14px 8px; box-shadow: none; }
+.mode-card:not(.play-main) .mode-sub { display: none; }
+.mode-card:not(.play-main) .mode-title { font-size: 14.5px; }
+.mode-card .new-tag { display: block; width: fit-content; margin: 4px auto 0; }
+.hero { padding: 28px 36px; }
+.hero h1 { margin-bottom: 12px; }
+@media (max-width: 900px) { .modes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .modes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .mode-card:not(.play-main) { padding: 10px 4px; align-items: center; }
+  .mode-card:not(.play-main) .mode-title { font-size: 13px; }
+  .hero { grid-template-areas: "art" "title" "lede"; padding: 14px 16px 16px; }
+  .hero-art { max-width: 210px; margin-top: 12px; }
+  .hero h1 { margin-top: 10px; font-size: 26px; }
+  .hero .lede { display: block; grid-area: lede; margin-top: 8px; font-size: 14.5px; }
 }
