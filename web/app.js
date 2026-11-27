@@ -250,6 +250,21 @@
       }
       html.push(this.arrowSvg());
       this.el.innerHTML = html.join('');
+      // A drop that was just played lands with a bounce and a ripple. The board redraws often
+      // (selections, engine lines), so a redraw mid-landing picks the animation up where it was.
+      const key = this.lastMove && moveDrop(this.lastMove) ? `${this.lastMove}:${pos.undo.length}:${pos.hashLo}` : '';
+      if (key !== this.droppedKey) {
+        this.droppedKey = key;
+        this.droppedAt = performance.now();
+      }
+      const since = performance.now() - this.droppedAt;
+      if (key && since < 900) {
+        const el = this.el.querySelector(`[data-sq="${moveTo(this.lastMove)}"]`);
+        if (el) {
+          el.classList.add('dropped');
+          el.style.setProperty('--drop-t', `${-Math.round(since)}ms`);
+        }
+      }
     }
 
     center(sq) {
@@ -3050,37 +3065,56 @@
 
   // --- decoration -------------------------------------------------------------------------
 
-  // The hero: a drop in action. A rook leaves White's reserve tray under the board, flies in over
-  // the empty squares (each one a place it could land) and lands on e2, checking the king on e5.
-  // The motion is CSS (.hero-art in style.css); with reduced motion the rook just sits on e2.
+  // The hero: a real Maki combination, played on a loop. White, with a bishop in reserve:
+  //   rkp3/pp1PR1/r5/4KP/1q2P1/P5[B] w 0 25
+  // 1. B@c5+!!  The hand drops the bishop with check. The only reply is
+  // 1… c6xc5    the pawn takes it, which opens the sixth rank and plugs c5 with Black's own pawn.
+  // 2. Re6#     Checkmate. (Stockhorse finds it as mate in 2; web/test-coach.js checks the line.)
+  // The motion is CSS (.hero-art in style.css); with reduced motion the final position shows.
+  const HERO = { fen: 'rkp3/pp1PR1/r5/4KP/1q2P1/P5[B] w 0 25', line: ['B@c5', 'c6c5', 'e5e6'] };
   function heroArt() {
-    const piece = (letter, color, col, row, extra = '') =>
-      `<svg class="piece ${color === 'w' ? 'pw' : 'pb'}"${extra} x="${col * 10 + 0.6}" y="${row * 10 + 0.6}" width="8.8" height="8.8" viewBox="0 0 100 100">${window.Pieces.shapes[letter]}</svg>`;
-    // [letter, colour, column from a, row from the top]
-    const men = [['R', 'b', 0, 0], ['N', 'b', 2, 0], ['P', 'b', 1, 1], ['P', 'b', 3, 1], ['K', 'b', 4, 1], ['P', 'b', 5, 2],
-      ['P', 'w', 0, 4], ['P', 'w', 2, 3], ['N', 'w', 1, 5], ['K', 'w', 2, 5], ['Q', 'w', 3, 4]];
-    const taken = new Set(men.map(m => `${m[2]},${m[3]}`));
-    const cells = [], dots = [];
-    for (let r = 0; r < 6; r++) {
-      for (let c = 0; c < 6; c++) {
-        const light = (r + c) % 2 === 0;
-        cells.push(`<rect x="${c * 10}" y="${r * 10}" width="10" height="10" fill="var(--${light ? 'sq-light' : 'sq-dark'})"/>`);
-        if (!taken.has(`${c},${r}`)) dots.push(`<circle cx="${c * 10 + 5}" cy="${r * 10 + 5}" r="1.5"/>`);
+    const piece = (letter, color, col, row, cls = '') =>
+      `<svg class="piece ${color === 'w' ? 'pw' : 'pb'}${cls ? ` ${cls}` : ''}" x="${col * 10 + 0.6}" y="${row * 10 + 0.6}" width="8.8" height="8.8" viewBox="0 0 100 100">${window.Pieces.shapes[letter]}</svg>`;
+    const pos = new Position(HERO.fen);
+    const cells = [], men = [];
+    for (let row = 0; row < 6; row++) {
+      for (let col = 0; col < 6; col++) {
+        const sq = (5 - row) * 6 + col;
+        cells.push(`<rect x="${col * 10}" y="${row * 10}" width="10" height="10" fill="var(--${(col + row) % 2 ? 'sq-dark' : 'sq-light'})"/>`);
+        const code = pos.board[sq];
+        if (!code) continue;
+        const name = SK.sqName(sq);
+        // The two pieces that move get their own class, so the CSS can slide them.
+        const cls = name === 'c6' ? 'ha-pawn' : name === 'e5' ? 'ha-rook' : '';
+        men.push(piece(LETTERS[code & 7], code >> 3 ? 'b' : 'w', col, row, cls));
       }
     }
-    // The tray: White's reserve, two pawns, a bishop and the rook about to drop.
-    const tray = `<rect class="ha-tray" x="12" y="63" width="36" height="13" rx="3"/>
-      ${piece('P', 'w', 1.35, 6.4)}${piece('B', 'w', 2.35, 6.4)}<rect class="ha-slot" x="34" y="64.5" width="10" height="10" rx="2"/>`;
-    return `<svg viewBox="-2 -2 64 80">
+    // A white glove that pinches at (0, 0), its wrist up and to the right.
+    const hand = `<g class="ha-hand"><g transform="rotate(-24) scale(0.85)">
+        <path class="ha-glove" d="M-3.2 -11.5 C-5.8 -9.6 -6.4 -6 -5 -3.2 C-4.4 -1.9 -3 -1.6 -2.6 -3 L-3 -6.2 Z"/>
+        <rect class="ha-cuff" x="-4.6" y="-27" width="10.5" height="6" rx="1.6"/>
+        <path class="ha-glove" d="M-4 -21.5 C-6.5 -17 -6.8 -13 -5.6 -10.2 L-4.6 -6.4 C-4.3 -4.6 -2.6 -4.4 -2.1 -6 L-2.3 -8.6 L-1.6 -1.2 C-1.4 0.6 1.4 0.6 1.6 -1.2 L1.8 -9.4 C3.6 -9.2 5.2 -10.6 5.8 -12.6 C6.8 -15.8 6.4 -19 5.4 -21.5 Z"/>
+        <path class="ha-crease" d="M1.8 -9.4 C2.6 -11 3.8 -12 5.6 -12.4 M2.4 -13.6 C3.6 -14.6 4.8 -15 6.1 -15.2"/>
+      </g></g>`;
+    return `<svg viewBox="-2 -9 64 88" role="img" aria-label="A Maki checkmate: White drops a bishop on c5 with check, the pawn takes it, and the rook mates on e6.">
       <rect x="-1" y="-1" width="62" height="62" rx="3" fill="var(--surface)" stroke="var(--line)" stroke-width="0.5"/>
       <g>${cells.join('')}</g>
-      <rect class="ha-land" x="40" y="40" width="10" height="10"/>
-      <circle class="ha-check" cx="45" cy="15" r="5.2"/>
-      <g class="ha-dots">${dots.join('')}</g>
-      ${men.map(m => piece(...m)).join('')}
-      <path class="ha-line" d="M45 40 V21"/>
-      ${tray}
-      <g class="ha-rook">${piece('R', 'w', 3.45, 6.45)}</g>
+      <circle class="ha-ripple" cx="25" cy="15" r="4"/>
+      <rect class="ha-land" x="20" y="10" width="10" height="10"/>
+      <circle class="ha-check" cx="15" cy="5" r="5.4"/>
+      <g class="ha-brill"><circle cx="29.2" cy="10.6" r="2.6"/><text x="29.2" y="11.75">!!</text></g>
+      ${men.join('')}
+      <path class="ha-line" d="M41 5 H21"/>
+      <rect class="ha-tray" x="12" y="63.5" width="31.5" height="13" rx="3"/>
+      <text class="ha-tray-label" x="14.5" y="71">Reserve</text>
+      <rect class="ha-slot" x="32.5" y="65" width="10" height="10" rx="2"/>
+      <g class="ha-bishop">${piece('B', 'w', 3.25, 6.5)}</g>
+      ${hand}
+      <g class="ha-caption">
+        <text class="ha-cap ha-cap1" x="30" y="-3.2">1. B@c5+!!  The drop</text>
+        <text class="ha-cap ha-cap2" x="30" y="-3.2">1… c6×c5  Forced</text>
+        <text class="ha-cap ha-cap3" x="30" y="-3.2">2. Re6#  Checkmate</text>
+      </g>
     </svg>`;
   }
 

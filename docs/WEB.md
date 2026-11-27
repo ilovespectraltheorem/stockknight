@@ -26,7 +26,8 @@ node web/calibrate.js         # re-measure the Elo of each strength setting (see
 | Pass and play | Both sides on one screen; the board turns to the side to move |
 | Play screen | Status, the move list and one row of tools: Undo, Flip, Eval, Resign and More (New game, Analyse on the board, Share, Review this game). When a game ends, Review this game and New game come up above the tools |
 | Online | See [Online play](#online-play) below |
-| Moving | Click or drag a piece. To drop, click a piece in your reserve (beside the board), then a highlighted square. A reserve piece is only clickable when it has a legal drop |
+| Moving | Click or drag a piece. To drop, click a piece in your reserve (beside the board), then a highlighted square. A reserve piece is only clickable when it has a legal drop, and then it is outlined and bobs a few times. A dropped piece lands with a bounce and a ripple on every board |
+| Home hero | A real combination on a loop: a gloved hand drops a bishop from the reserve, 1. B@c5+!! c6xc5 2. Re6# (from `rkp3/pp1PR1/r5/4KP/1q2P1/P5[B] w 0 25`; Stockhorse finds it as mate in 2, and `web/test-coach.js` checks it stays forced). With reduced motion the final position shows |
 | Analysis board | See [Analysis board](#analysis-board) below |
 | Learn | See [Learn](#learn) below |
 | Train | `#/train`: named openings to study and practise, 367 middlegame tactics and 270 tablebase endgames with levels, hints, explanations and a training rating. See [TRAIN.md](TRAIN.md) |
