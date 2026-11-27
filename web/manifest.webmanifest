@@ -1,7 +1,7 @@
 {
   "name": "Maki",
   "short_name": "Maki",
-  "description": "Play Maki, the 6×6 drop game, against the Stockhorse engine or a friend, and review your games move by move.",
+  "description": "Maki is chess on a 6×6 board where you keep pieces in reserve and drop them onto any empty square. Play the Stockhorse engine or a friend, learn as you play, and review every game.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

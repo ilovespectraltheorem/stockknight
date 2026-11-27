@@ -3050,24 +3050,38 @@
 
   // --- decoration -------------------------------------------------------------------------
 
-  // The hero: a knight on c3 of a 6×6 board, its jumps marked and one L traced.
+  // The hero: a drop in action. A rook leaves White's reserve tray under the board, flies in over
+  // the empty squares (each one a place it could land) and lands on e2, checking the king on e5.
+  // The motion is CSS (.hero-art in style.css); with reduced motion the rook just sits on e2.
   function heroArt() {
-    const cells = [];
+    const piece = (letter, color, col, row, extra = '') =>
+      `<svg class="piece ${color === 'w' ? 'pw' : 'pb'}"${extra} x="${col * 10 + 0.6}" y="${row * 10 + 0.6}" width="8.8" height="8.8" viewBox="0 0 100 100">${window.Pieces.shapes[letter]}</svg>`;
+    // [letter, colour, column from a, row from the top]
+    const men = [['R', 'b', 0, 0], ['N', 'b', 2, 0], ['P', 'b', 1, 1], ['P', 'b', 3, 1], ['K', 'b', 4, 1], ['P', 'b', 5, 2],
+      ['P', 'w', 0, 4], ['P', 'w', 2, 3], ['N', 'w', 1, 5], ['K', 'w', 2, 5], ['Q', 'w', 3, 4]];
+    const taken = new Set(men.map(m => `${m[2]},${m[3]}`));
+    const cells = [], dots = [];
     for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 6; c++) {
         const light = (r + c) % 2 === 0;
         cells.push(`<rect x="${c * 10}" y="${r * 10}" width="10" height="10" fill="var(--${light ? 'sq-light' : 'sq-dark'})"/>`);
+        if (!taken.has(`${c},${r}`)) dots.push(`<circle cx="${c * 10 + 5}" cy="${r * 10 + 5}" r="1.5"/>`);
       }
     }
-    const kx = 2, ky = 3; // c3 (row 3 from the top)
-    const jumps = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]]
-      .map(([dx, dy]) => [kx + dx, ky + dy])
-      .filter(([x, y]) => x >= 0 && x < 6 && y >= 0 && y < 6);
-    const dots = jumps.map(([x, y]) => `<circle cx="${x * 10 + 5}" cy="${y * 10 + 5}" r="1.9" fill="var(--accent)" opacity="0.9"/>`).join('');
-    const path = `<path d="M${kx * 10 + 5} ${ky * 10 + 5} V${(ky - 2) * 10 + 5} H${(kx + 1) * 10 + 5}" fill="none" stroke="var(--accent)" stroke-width="1.1" stroke-dasharray="2 1.6" stroke-linecap="round"/>`;
-    const knight = `<g transform="translate(${kx * 10 - 1} ${ky * 10 - 1.5}) scale(0.12)">${window.Pieces.shapes.N.replace(/class="b"/g, 'class="b" fill="#f8f4ea" stroke="#1d2127" stroke-width="3"').replace(/class="d"/g, 'class="d" fill="#1d2127" stroke="#1d2127"')}</g>`;
-    return `<svg viewBox="-1 -1 62 62"><rect x="-1" y="-1" width="62" height="62" rx="3" fill="var(--surface)" stroke="var(--line)" stroke-width="0.5"/>
-      <g>${cells.join('')}</g>${path}${dots}${knight}</svg>`;
+    // The tray: White's reserve, two pawns, a bishop and the rook about to drop.
+    const tray = `<rect class="ha-tray" x="12" y="63" width="36" height="13" rx="3"/>
+      ${piece('P', 'w', 1.35, 6.4)}${piece('B', 'w', 2.35, 6.4)}<rect class="ha-slot" x="34" y="64.5" width="10" height="10" rx="2"/>`;
+    return `<svg viewBox="-2 -2 64 80">
+      <rect x="-1" y="-1" width="62" height="62" rx="3" fill="var(--surface)" stroke="var(--line)" stroke-width="0.5"/>
+      <g>${cells.join('')}</g>
+      <rect class="ha-land" x="40" y="40" width="10" height="10"/>
+      <circle class="ha-check" cx="45" cy="15" r="5.2"/>
+      <g class="ha-dots">${dots.join('')}</g>
+      ${men.map(m => piece(...m)).join('')}
+      <path class="ha-line" d="M45 40 V21"/>
+      ${tray}
+      <g class="ha-rook">${piece('R', 'w', 3.45, 6.45)}</g>
+    </svg>`;
   }
 
   const BOARDS = ['steel', 'oak', 'heraldry', 'midnight'];
