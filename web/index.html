@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Maki</title>
+  <title>Maki · drop chess</title>
   <meta name="description" content="Maki is chess on a 6×6 board where you keep pieces in reserve and drop them onto any empty square. Play the Stockhorse engine or a friend, learn as you play, and review every game.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
@@ -52,17 +52,17 @@
           <span class="mode-icon" data-piece="N"></span>
           <span class="play-main-text">
             <span class="mode-title">Play Stockhorse</span>
-            <span class="mode-sub">The engine, at the strength you choose</span>
+            <span class="mode-sub">Drop in against the engine, at the strength you choose</span>
           </span>
           <span class="play-main-go" aria-hidden="true">→</span>
         </button>
         <button class="mode-card" data-mode="learn" id="learnCard">
           <span class="mode-icon" data-piece="P"></span>
-          <span><span class="mode-title">Learn by playing <span class="new-tag" id="learnNew" hidden>New? Start here</span></span><span class="mode-sub">A real game, rules explained as they come up</span></span>
+          <span><span class="mode-title">Learn by playing <span class="new-tag" id="learnNew" hidden>New? Start here</span></span><span class="mode-sub">A real game: drops and every rule explained as they come up</span></span>
         </button>
         <button class="mode-card" data-mode="local">
           <span class="mode-icon" data-piece="Q"></span>
-          <span><span class="mode-title">Pass and play</span><span class="mode-sub">A friend beside you</span></span>
+          <span><span class="mode-title">Pass and play</span><span class="mode-sub">A friend beside you, a reserve each</span></span>
         </button>
         <button class="mode-card" data-mode="online" id="onlineCard">
           <span class="mode-icon" data-piece="K"></span>
@@ -70,15 +70,15 @@
         </button>
         <button class="mode-card" data-mode="train">
           <span class="mode-icon" data-piece="R"></span>
-          <span><span class="mode-title">Train</span><span class="mode-sub">Openings, tactics and endgames</span></span>
+          <span><span class="mode-title">Train</span><span class="mode-sub">Openings, drop tactics and endgames</span></span>
         </button>
         <button class="mode-card" data-mode="analysis">
           <span class="mode-icon" data-piece="B"></span>
-          <span><span class="mode-title">Analysis board</span><span class="mode-sub">Set up a position, see the best lines</span></span>
+          <span><span class="mode-title">Analysis board</span><span class="mode-sub">Set up a position, see the best moves and drops</span></span>
         </button>
         <button class="mode-card" data-mode="review">
           <span class="mode-icon" data-piece="N"></span>
-          <span><span class="mode-title">Review a game</span><span class="mode-sub">Accuracy, blunders and better moves</span></span>
+          <span><span class="mode-title">Review a game</span><span class="mode-sub">Accuracy, blunders and the drops you missed</span></span>
         </button>
       </div>
 
@@ -359,6 +359,13 @@
       <article class="rules">
         <h2>Maki in two minutes</h2>
         <p>The rules Stockhorse and every part of this site play by (ruleset <code>knightchess-2</code>).</p>
+        <p class="rules-lead"><b>The heart of Maki is the drop.</b> Besides the pieces on the board, each side keeps a small reserve. On any turn you may move, or drop a reserve piece onto any empty square: to attack, to defend, to block a check, or to give mate.</p>
+        <h3>Drops</h3>
+        <ul>
+          <li>Each side starts with 2 pawns, 1 rook and 1 bishop in reserve. Instead of moving, you may drop one on any empty square.</li>
+          <li>Captured pieces leave the game; they never join a reserve.</li>
+          <li>No pawn drop on a file that already has one of your own pawns; any rank is fine, the far rank included. A rook or bishop drop needs fewer than 2 of your rooks and bishops on the board.</li>
+        </ul>
         <h3>Board and pieces</h3>
         <ul>
           <li>6×6 board. White sets up on rank 1 as bishop, knight, queen, king, knight, rook, with pawns on rank 2. Black's setup is the same rotated half a turn.</li>
@@ -371,12 +378,6 @@
           <li>A pawn can always move or capture one square straight ahead, all the way to the far rank. It never captures diagonally.</li>
           <li>In the opponent's half (ranks 4–6 for White) it can also move or capture one square left or right.</li>
           <li>A pawn never moves backwards. No double step, en passant or promotion: a pawn on the far rank can only step sideways.</li>
-        </ul>
-        <h3>Drops</h3>
-        <ul>
-          <li>Each side starts with 2 pawns, 1 rook and 1 bishop in reserve. Instead of moving, you may drop one on any empty square.</li>
-          <li>Captured pieces leave the game; they never join a reserve.</li>
-          <li>No pawn drop on a file that already has one of your own pawns; any rank is fine, the far rank included. A rook or bishop drop needs fewer than 2 of your rooks and bishops on the board.</li>
         </ul>
         <h3>Winning</h3>
         <ul>

@@ -122,5 +122,18 @@ check('random games never trip the coach', () => {
   }
 });
 
+// The home page's hero plays this combination (heroArt in web/app.js): it must stay a real one.
+check('the hero combination is a forced mate in 2 with a drop', () => {
+  const pos = new Position('rkp3/pp1PR1/r5/4KP/1q2P1/P5[B] w 0 25');
+  const drop = pos.moveFromUci('B@c5');
+  assert.ok(drop, 'B@c5 is legal');
+  pos.makeMove(drop);
+  assert.ok(pos.inCheck(), 'the drop gives check');
+  assert.deepStrictEqual(pos.legalMoves().map(m => pos.moveToUci(m)), ['c6c5'], 'the only reply takes the bishop');
+  pos.makeMove(pos.moveFromUci('c6c5'));
+  pos.makeMove(pos.moveFromUci('e5e6'));
+  assert.deepStrictEqual(pos.status(), { state: 'win', winner: WHITE, reason: 'checkmate' });
+});
+
 console.log(`${passed} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);
