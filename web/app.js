@@ -3070,11 +3070,13 @@
   // 1. B@c5+!!  The hand drops the bishop with check. The only reply is
   // 1… c6xc5    the pawn takes it, which opens the sixth rank and plugs c5 with Black's own pawn.
   // 2. Re6#     Checkmate. (Stockhorse finds it as mate in 2; web/test-coach.js checks the line.)
-  // The motion is CSS (.hero-art in style.css); with reduced motion the final position shows.
+  // The motion is driven from JavaScript (heroPlay below) by setting SVG transform and opacity
+  // attributes on plain <g> groups, so it looks the same in every browser (CSS transforms on
+  // nested <svg> elements do nothing in Safari). With reduced motion the final position shows.
   const HERO = { fen: 'rkp3/pp1PR1/r5/4KP/1q2P1/P5[B] w 0 25', line: ['B@c5', 'c6c5', 'e5e6'] };
   function heroArt() {
-    const piece = (letter, color, col, row, cls = '') =>
-      `<svg class="piece ${color === 'w' ? 'pw' : 'pb'}${cls ? ` ${cls}` : ''}" x="${col * 10 + 0.6}" y="${row * 10 + 0.6}" width="8.8" height="8.8" viewBox="0 0 100 100">${window.Pieces.shapes[letter]}</svg>`;
+    const piece = (letter, color, col, row) =>
+      `<svg class="piece ${color === 'w' ? 'pw' : 'pb'}" x="${col * 10 + 0.6}" y="${row * 10 + 0.6}" width="8.8" height="8.8" viewBox="0 0 100 100">${window.Pieces.shapes[letter]}</svg>`;
     const pos = new Position(HERO.fen);
     const cells = [], men = [];
     for (let row = 0; row < 6; row++) {
@@ -3084,13 +3086,14 @@
         const code = pos.board[sq];
         if (!code) continue;
         const name = SK.sqName(sq);
-        // The two pieces that move get their own class, so the CSS can slide them.
-        const cls = name === 'c6' ? 'ha-pawn' : name === 'e5' ? 'ha-rook' : '';
-        men.push(piece(LETTERS[code & 7], code >> 3 ? 'b' : 'w', col, row, cls));
+        // The two pieces that move sit in their own group, so the animation can slide them.
+        const svg = piece(LETTERS[code & 7], code >> 3 ? 'b' : 'w', col, row);
+        const track = name === 'c6' ? 'pawn' : name === 'e5' ? 'rook' : '';
+        men.push(track ? `<g data-ha="${track}">${svg}</g>` : svg);
       }
     }
     // A white glove that pinches at (0, 0), its wrist up and to the right.
-    const hand = `<g class="ha-hand"><g transform="rotate(-24) scale(0.85)">
+    const hand = `<g data-ha="hand"><g transform="rotate(-24) scale(0.85)">
         <path class="ha-glove" d="M-3.2 -11.5 C-5.8 -9.6 -6.4 -6 -5 -3.2 C-4.4 -1.9 -3 -1.6 -2.6 -3 L-3 -6.2 Z"/>
         <rect class="ha-cuff" x="-4.6" y="-27" width="10.5" height="6" rx="1.6"/>
         <path class="ha-glove" d="M-4 -21.5 C-6.5 -17 -6.8 -13 -5.6 -10.2 L-4.6 -6.4 C-4.3 -4.6 -2.6 -4.4 -2.1 -6 L-2.3 -8.6 L-1.6 -1.2 C-1.4 0.6 1.4 0.6 1.6 -1.2 L1.8 -9.4 C3.6 -9.2 5.2 -10.6 5.8 -12.6 C6.8 -15.8 6.4 -19 5.4 -21.5 Z"/>
@@ -3099,23 +3102,89 @@
     return `<svg viewBox="-2 -9 64 88" role="img" aria-label="A Maki checkmate: White drops a bishop on c5 with check, the pawn takes it, and the rook mates on e6.">
       <rect x="-1" y="-1" width="62" height="62" rx="3" fill="var(--surface)" stroke="var(--line)" stroke-width="0.5"/>
       <g>${cells.join('')}</g>
-      <circle class="ha-ripple" cx="25" cy="15" r="4"/>
-      <rect class="ha-land" x="20" y="10" width="10" height="10"/>
-      <circle class="ha-check" cx="15" cy="5" r="5.4"/>
-      <g class="ha-brill"><g class="ha-brill-pop"><circle cx="29.4" cy="10.4" r="3.8"/><text x="29.4" y="12">!!</text></g></g>
+      <g data-ha="land"><rect class="ha-land" x="20" y="10" width="10" height="10"/></g>
+      <g data-ha="ripple"><circle class="ha-ripple" cx="25" cy="15" r="4"/></g>
+      <g data-ha="check"><circle class="ha-check" cx="15" cy="5" r="5.4"/></g>
       ${men.join('')}
-      <path class="ha-line" d="M41 5 H21"/>
+      <g data-ha="line"><path class="ha-line" d="M41 5 H21"/></g>
       <rect class="ha-tray" x="12" y="63.5" width="31.5" height="13" rx="3"/>
       <text class="ha-tray-label" x="14.5" y="71">Reserve</text>
-      <rect class="ha-slot" x="32.5" y="65" width="10" height="10" rx="2"/>
-      <g class="ha-bishop">${piece('B', 'w', 3.25, 6.5)}</g>
+      <g data-ha="slot"><rect class="ha-slot" x="32.5" y="65" width="10" height="10" rx="2"/></g>
+      <g data-ha="bishop">${piece('B', 'w', 3.25, 6.5)}</g>
+      <g data-ha="brill" class="ha-brill"><circle cx="29.4" cy="10.4" r="3.8"/><text x="29.4" y="12">!!</text></g>
       ${hand}
-      <g class="ha-caption">
-        <g class="ha-cap ha-cap1"><rect x="7" y="-8.6" width="46" height="6.6" rx="3.3"/><text x="30" y="-4.1">!!  Brilliant drop: B@c5+</text></g>
-        <g class="ha-cap ha-cap2"><rect x="13" y="-8.6" width="34" height="6.6" rx="3.3"/><text x="30" y="-4.1">1… c6×c5, forced</text></g>
-        <g class="ha-cap ha-cap3"><rect x="1" y="-8.6" width="58" height="6.6" rx="3.3"/><text x="30" y="-4.1"><tspan class="ha-bang">B@c5!!</tspan> c6×c5 Re6#  Checkmate</text></g>
-      </g>
+      <g data-ha="cap1" class="ha-cap ha-cap1"><rect x="7" y="-8.6" width="46" height="6.6" rx="3.3"/><text x="30" y="-4.1">!!  Brilliant drop: B@c5+</text></g>
+      <g data-ha="cap2" class="ha-cap ha-cap2"><rect x="13" y="-8.6" width="34" height="6.6" rx="3.3"/><text x="30" y="-4.1">1… c6×c5, forced</text></g>
+      <g data-ha="cap3" class="ha-cap ha-cap3"><rect x="1" y="-8.6" width="58" height="6.6" rx="3.3"/><text x="30" y="-4.1"><tspan class="ha-bang">B@c5!!</tspan> c6×c5 Re6#  Checkmate</text></g>
     </svg>`;
+  }
+
+  // The hero's timeline: for each group, keyframes [time 0..1 of a 12 s loop, { x, y, s, o }]
+  // (translate, scale about the group's centre `c`, opacity). Values a keyframe leaves out
+  // carry over from the one before it.
+  const HERO_LOOP = 12000;
+  const HERO_TRACKS = {
+    hand: { k: [[0, { x: 78, y: 30, o: 0 }], [0.06, { o: 1 }], [0.14, { x: 37.5, y: 65.6 }], [0.18, { y: 66.6 }], [0.3, { x: 27, y: -1 }], [0.36, { x: 25, y: 10.6 }], [0.39, {}], [0.48, { x: 72, y: -14, o: 0 }]] },
+    bishop: { c: [37.5, 74.4], k: [[0, { x: 0, y: 0, s: 1, o: 1 }], [0.18, {}], [0.3, { x: -10.5, y: -66.6, s: 1.12 }], [0.36, { x: -12.5, y: -55, s: 1 }], [0.38, { s: 0.9 }], [0.41, { s: 1 }], [0.53, {}], [0.57, { s: 0.6, o: 0 }], [0.95, {}], [0.96, { x: 0, y: 0, s: 1 }], [1, { o: 1 }]] },
+    slot: { k: [[0, { o: 1 }], [0.16, {}], [0.22, { o: 0.3 }], [0.94, {}], [1, { o: 1 }]] },
+    land: { k: [[0, { o: 0 }], [0.37, {}], [0.41, { o: 1 }], [0.52, {}], [0.57, { o: 0 }]] },
+    ripple: { c: [25, 15], k: [[0, { s: 0.6, o: 0 }], [0.37, {}], [0.38, { s: 0.8, o: 0.9 }], [0.46, { s: 2.4, o: 0 }]] },
+    brill: { c: [29.4, 10.4], k: [[0, { s: 0, o: 0 }], [0.38, {}], [0.41, { s: 1.35, o: 1 }], [0.44, { s: 1 }], [0.54, {}], [0.57, { o: 0 }]] },
+    check: { k: [[0, { o: 0 }], [0.38, {}], [0.41, { o: 1 }], [0.52, {}], [0.56, { o: 0 }], [0.66, {}], [0.71, { o: 1 }], [0.92, {}], [0.97, { o: 0 }]] },
+    pawn: { k: [[0, { y: 0 }], [0.52, {}], [0.57, { y: 10 }], [0.94, {}], [0.99, { y: 0 }]] },
+    rook: { k: [[0, { y: 0 }], [0.64, {}], [0.7, { y: -10 }], [0.94, {}], [0.99, { y: 0 }]] },
+    line: { k: [[0, { o: 0 }], [0.69, {}], [0.73, { o: 1 }], [0.92, {}], [0.97, { o: 0 }]] },
+    cap1: { k: [[0, { o: 0 }], [0.38, {}], [0.41, { o: 1 }], [0.54, {}], [0.56, { o: 0 }]] },
+    cap2: { k: [[0, { o: 0 }], [0.55, {}], [0.57, { o: 1 }], [0.65, {}], [0.67, { o: 0 }]] },
+    cap3: { k: [[0, { o: 0 }], [0.67, {}], [0.71, { o: 1 }], [0.94, {}], [0.97, { o: 0 }]] },
+  };
+  // Fill in every value at every keyframe, carrying the last one forward.
+  for (const t of Object.values(HERO_TRACKS)) {
+    let last = { x: 0, y: 0, s: 1, o: 1 };
+    t.k = t.k.map(([at, v]) => [at, (last = { ...last, ...v })]);
+  }
+  const smooth = u => u * u * (3 - 2 * u);
+  function heroState(track, f) {
+    const k = track.k;
+    if (f <= k[0][0]) return k[0][1];
+    for (let i = 1; i < k.length; i++) {
+      if (f <= k[i][0]) {
+        const [a, va] = k[i - 1], [b, vb] = k[i];
+        const u = smooth((f - a) / (b - a || 1));
+        const out = {};
+        for (const p in vb) out[p] = va[p] + (vb[p] - va[p]) * u;
+        return out;
+      }
+    }
+    return k[k.length - 1][1];
+  }
+  // Draws the hero at `f` (0..1 through the loop).
+  function heroFrame(svg, f) {
+    for (const el of svg.querySelectorAll('[data-ha]')) {
+      const track = HERO_TRACKS[el.dataset.ha];
+      const v = heroState(track, f);
+      let tr = `translate(${v.x.toFixed(2)} ${v.y.toFixed(2)})`;
+      if (track.c && v.s !== 1) {
+        const [cx, cy] = track.c;
+        tr += ` translate(${cx} ${cy}) scale(${v.s.toFixed(3)}) translate(${-cx} ${-cy})`;
+      }
+      el.setAttribute('transform', tr);
+      el.setAttribute('opacity', v.o.toFixed(3));
+    }
+  }
+  // Plays the hero while the home page shows; with reduced motion it shows the mate.
+  function heroPlay() {
+    const svg = $('#heroArt svg');
+    const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (still) return heroFrame(svg, 0.85);
+    const start = performance.now();
+    window.MakiHero = { frame: f => heroFrame(svg, f), paused: false }; // for screenshots and tests
+    const tick = now => {
+      if (!window.MakiHero.paused && !$('#view-home').hidden && !document.hidden) heroFrame(svg, ((now - start) % HERO_LOOP) / HERO_LOOP);
+      requestAnimationFrame(tick);
+    };
+    heroFrame(svg, 0);
+    requestAnimationFrame(tick);
   }
 
   const BOARDS = ['steel', 'oak', 'heraldry', 'midnight'];
@@ -3137,6 +3206,7 @@
     };
     $('#brandMark').innerHTML = pieceSvg('N', 'w');
     $('#heroArt').innerHTML = heroArt();
+    heroPlay();
     $$('.mode-icon').forEach(el => (el.innerHTML = pieceSvg(el.dataset.piece, 'w')));
     $$('#colorSeg i[data-piece]').forEach(el => (el.innerHTML = pieceSvg(el.dataset.piece, el.dataset.color)));
 
@@ -3214,6 +3284,7 @@
       backend = b;
       if (!b) {
         $('#onlineCard').disabled = true;
+        setTimeout(() => ($('#onlineCard').title = $('#onlineSub').textContent), 0);
         $('#onlineSub').textContent = window.claude
           ? 'Sign in to claude.ai, and ask the owner for access that lets you interact with this page.'
           : (window.MAKI_CONFIG && window.MAKI_CONFIG.server)
